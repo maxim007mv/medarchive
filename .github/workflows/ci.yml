@@ -4,16 +4,21 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Nightly: ZAP baseline and k6 (test-strategy.md, section 1).
+    - cron: "0 1 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
   NEXT_TELEMETRY_DISABLED: 1
+  # Highest block whose gate is green (docs/progress/blocks.md); E2E of later blocks is pending.
+  GATE_BLOCK: ${{ vars.GATE_BLOCK || '1' }}
 
 jobs:
   checks:
@@ -34,10 +39,72 @@ jobs:
       - run: make lint
       - run: make typecheck
       - run: make test
+        env:
+          CONTRACT_BLOCK: ${{ env.GATE_BLOCK }}
+      - run: make alerts
 
-  images:
+  # OPS-04: a known vulnerability, a fixable HIGH/CRITICAL in an image or a leaked secret fails.
+  security:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - run: make images
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable pnpm
+      - uses: astral-sh/setup-uv@v10
+      - run: make images IMAGE_TAG=ci
+      - run: make security IMAGE_TAG=ci REPORT_DIR=reports
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: security-reports
+          path: reports/
+
+  # Stack-level suites: E2E (Chromium desktop, WebKit iPhone 13), contract, ZAP and k6 at night.
+  stack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable pnpm
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --directory apps/api --frozen
+      - run: make secrets
+      # The runner's key file is 0600 for the runner user; the api container runs as uid 10001.
+      - run: chmod 0644 secrets/kek_keyset.json
+      - run: docker compose up -d --build --wait --wait-timeout 300
+      - run: make fixtures
+      - run: pnpm --filter e2e exec playwright install --with-deps chromium webkit
+      - run: pnpm --filter e2e exec playwright test --grep "@b[1-${GATE_BLOCK}]\b"
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_RESULTS_DIR: ${{ github.workspace }}/reports/e2e
+      - run: make contract BLOCK=${GATE_BLOCK} REPORT_DIR=reports
+        if: env.GATE_BLOCK >= 3
+      - name: ZAP baseline and k6 (nightly)
+        if: github.event_name == 'schedule'
+        run: |
+          cookie=$(curl -fsS -D - -o /dev/null -X POST http://localhost:8000/api/v1/workspaces \
+            -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuidgen)" \
+            -d '{"consent":{"policy_version":"2026-11-10","accepted":true}}' \
+            | sed -n 's/^set-cookie: \([^;]*\).*/\1/ip')
+          make zap ZAP_COOKIE="$cookie" REPORT_DIR=reports
+          make load REPORT_DIR=reports
+      - run: docker compose logs --no-color > reports/stack.log
+        if: failure()
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: stack-reports
+          path: reports/
