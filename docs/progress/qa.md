@@ -46,6 +46,9 @@
 | Файл | Правка | Зачем |
 |---|---|---|
 | `docker-compose.yml` | `image: medarchive/{api,web}:${IMAGE_TAG:-local}`; порты MinIO `${MINIO_PORT:-9000}` и `${MINIO_CONSOLE_PORT:-9001}`; `S3_PUBLIC_ENDPOINT: http://localhost:${MINIO_PORT:-9000}` | Второй стек (гейт) не перетирает образы первого и не спорит за порты 9000 и 9001; значения по умолчанию прежние |
+| `docker-compose.yml`, сервис `web` | `S3_PUBLIC_ENDPOINT: http://localhost:${MINIO_PORT:-9000}` (`d398560`) | `apps/web/middleware.ts` строит `connect-src` CSP из этой переменной; без неё браузер стенда с MinIO не на 9000 не может загрузить файл. Проверено: заголовок стенда :3400 содержит `connect-src 'self' http://localhost:9400` |
+| `docker-compose.yml`, сервис `api` | `TRUSTED_PROXIES: ${TRUSTED_PROXIES:-[]}`, `RATE_LIMITS_ENABLED: ${RATE_LIMITS_ENABLED:-true}` (`470c9be`) | Параметры BE-12 из `fa14f11` (D-005, D-006); гейт переключает лимиты между фазами E2E |
+| Ошибка атрибуции | Коммит `d398560` по ошибке включил незакоммиченный тогда сервис `worker` (BE-13, агент BACKEND-DOCUMENTS): `git commit -- docker-compose.yml` берёт файл целиком. Содержимое совпадает с их работой (`9414eae`), поведение не изменилось | Дальше общие файлы коммичу из отдельного индекса только своими фрагментами (`git apply --cached`) |
 | `Makefile` | `lint` и `typecheck` проверяют и `tools/`; `images` принимает `IMAGE_TAG`; `setup` ставит WebKit; новые цели (таблица выше) | Скрипты гейта проходят те же проверки, что код |
 | `e2e/tests/smoke.spec.ts` | Проверка `<h1>Медархив</h1>` заменена на `lang="ru"`, добавлен тег `@b1` | Заголовок каркаса уходит с онбордингом FE-11; смоук не должен падать от этого |
 

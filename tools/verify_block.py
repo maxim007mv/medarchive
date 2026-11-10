@@ -58,6 +58,8 @@ BLOCK_TC_RANGES: dict[int, list[tuple[int, int]]] = {
     6: [(51, 60), (70, 84)],
     9: [(80, 81)],
 }
+# Cases that need the production rate limits; every other E2E test runs with limits off (D-006).
+RATE_LIMIT_TCS = ("TC-082", "TC-098")
 # From block 7 every in-scope P0 and P1 case is required and security steps become blocking.
 HARDENING_BLOCK = 7
 # AI suggestion is out of the prototype's scope (ADR-042).
@@ -373,19 +375,41 @@ def run_block2_checks(gate: Gate) -> None:
         )
 
 
-def run_e2e(gate: Gate) -> None:
-    grep = rf"@b[1-{gate.block}]\b"
-    results_dir = gate.logs / "e2e"
-    command = ["pnpm", "--filter", "e2e", "exec", "playwright", "test", "--grep", grep]
-    if gate.block >= HARDENING_BLOCK:
-        command.append("--repeat-each=3")  # QA-04: three green runs in a row, no flaky tests
+def set_rate_limits(gate: Gate, *, enabled: bool) -> bool:
+    """Recreates the api with RATE_LIMITS_ENABLED (D-006) and an empty limit store."""
+    compose("exec", "-T", "redis", "redis-cli", "FLUSHALL")
+    value = str(enabled).lower()
+    return gate.run(
+        f"api with RATE_LIMITS_ENABLED={value}",
+        ["docker", "compose", "-p", PROJECT, "up", "-d", "--wait", "api"],
+        env={"RATE_LIMITS_ENABLED": value},
+    )
+
+
+def run_playwright(gate: Gate, name: str, grep: str, *extra: str) -> None:
+    results_dir = gate.logs / re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     gate.run(
-        f"e2e Playwright {grep}",
-        command,
+        name,
+        ["pnpm", "--filter", "e2e", "exec", "playwright", "test", "--grep", grep, *extra],
         env={"E2E_BASE_URL": WEB_URL, "E2E_RESULTS_DIR": str(results_dir)},
         timeout_s=3600,
         summarize=from_report(lambda: read_playwright(results_dir / "report.json"), gate),
     )
+
+
+def run_e2e(gate: Gate, *, rate_limited: bool) -> None:
+    """Functional tests run without limits (each test creates its own archive from one IP);
+    the limit cases TC-082 and TC-098 run afterwards with the production limits, one by one."""
+    grep = rf"@b[1-{gate.block}]\b"
+    limit_cases = "|".join(f"@{tc}" for tc in RATE_LIMIT_TCS)
+    if not rate_limited:
+        repeat = ["--repeat-each=3"] if gate.block >= HARDENING_BLOCK else []  # QA-04: no flaky
+        run_playwright(gate, f"e2e {grep}, limits off", grep, "--grep-invert", limit_cases, *repeat)
+    else:
+        if set(RATE_LIMIT_TCS) & set(required_tcs(gate.block)):
+            both = rf"^(?=.*{grep})(?=.*({limit_cases})\b)"
+            run_playwright(gate, "e2e TC-082, TC-098, limits on", both, "--workers=1")
+        return
     listing = subprocess.run(
         ["pnpm", "--filter", "e2e", "exec", "playwright", "test", "--list", "--grep-invert", grep],
         cwd=WORKTREE,
@@ -686,15 +710,18 @@ def main() -> int:
             blocking=args.block >= HARDENING_BLOCK,
             summarize=lambda d: (d.returncode == 0, d.stdout.strip().replace("\n", "; ")),
         )
-        run_e2e(gate)
-        if args.block >= 3:
-            run_schemathesis(gate)
-        if args.block >= 4:
-            run_pii_scan(gate)
-        if args.block >= 5:
-            run_zap(gate)
-        if args.block >= HARDENING_BLOCK:
-            run_k6(gate)
+        if set_rate_limits(gate, enabled=False):
+            run_e2e(gate, rate_limited=False)
+            if args.block >= HARDENING_BLOCK:
+                run_k6(gate)
+        if set_rate_limits(gate, enabled=True):
+            run_e2e(gate, rate_limited=True)
+            if args.block >= 3:
+                run_schemathesis(gate)
+            if args.block >= 4:
+                run_pii_scan(gate)
+            if args.block >= 5:
+                run_zap(gate)
     else:
         gate.skip("stack checks: hardening, e2e, contract, PII, ZAP, k6", "stack is not healthy")
     run_supply_chain(gate)
