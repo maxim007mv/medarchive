@@ -103,6 +103,7 @@
   --component-fieldFocusRing: 0 0 0 3px color-mix(in srgb, var(--c-accent) 22%, transparent);
   --component-fieldErrorBorder: 2px;
   --component-segmentIndicator: inset 0 -2px 0 var(--c-accent);
+  --component-radioRowSelected: inset 0 0 0 1px var(--c-accent);
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;
