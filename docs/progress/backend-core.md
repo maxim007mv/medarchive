@@ -56,7 +56,7 @@
 
 ## Запросы к агенту БД
 
-1. **Часовой пояс архива.** `WorkspaceCreate.timezone` проверяется (IANA), но хранить его негде: в `workspaces` нет колонки, у `app.create_workspace` нет параметра. Прошу `workspaces.timezone text NOT NULL DEFAULT 'Europe/Moscow' CHECK (char_length(timezone) BETWEEN 1 AND 64)` и `p_timezone text` в `app.create_workspace`. До этого `GET /api/v1/session` не отдаёт `timezone` (поле необязательное в схеме), а список берёт зону из параметра `tz`.
+1. ~~Часовой пояс архива~~: сделано в 0003 (`ae0e473`), зона сохраняется и отдаётся (`feat(BE-04): persist workspace timezone`).
 
 ## Дефекты гейта (`docs/progress/blocks.md`)
 
@@ -75,7 +75,7 @@
 
 ## Вопросы владельцу
 
-1. Лимит удаления архива 1 в час тратится на любой запрос, в том числе на 412 (архив изменился в другой вкладке): после такой ошибки повторить удаление можно только через час. Оставить по контракту или считать только успешные удаления?
+1. ~~Лимит удаления архива~~: решение владельца, считаются только принятые удаления (202), сделано ниже.
 
 ## Проверка (команды и результат)
 
@@ -99,3 +99,22 @@
 Фикстуры `redis_url` и `api` в моих тестовых файлах объявлены локально, потому что `conftest.py` с общими фикстурами агента документов ещё не закоммичен; после его коммита локальные копии можно удалить (локальная фикстура модуля перекрывает фикстуру `conftest.py`, поэтому конфликта нет).
 
 Testcontainers на Docker Desktop: нужен `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`; при параллельных прогонах нескольких агентов Ryuk конфликтует по имени, помогает `TESTCONTAINERS_RYUK_DISABLED=true` (фикстуры останавливают контейнеры сами).
+
+## Доработки после блока 3 (10.11.2026)
+
+| Что | Как | Коммит |
+|---|---|---|
+| D-010: ruff PT011 | `pytest.raises(OSError)` в `tests/unit/test_crypto.py` (а не в `test_security.py`) сужен до `FileNotFoundError`. Падающего теста в `tests/unit/test_security.py` на текущем `main` нет: `tests/unit` 231 passed | `0e04d04` |
+| Лимит удаления архива | Только принятое удаление (202) тратит бюджет 1 в час. Маршрут читает бюджет без траты (`deferred_rate_limit`, заголовки `RateLimit` на каждом ответе), сервис тратит его атомарно (GCRA под WATCH/MULTI) внутри транзакции удаления после всех проверок: пустой бюджет даёт 429 и откатывает удаление, сбой после траты возвращает запрос (`refund`). 401, 403, 412, 428, 422 бюджет не тратят; после принятого удаления повтор той же cookie получает 401, а не 429 | `ab7b1ce` |
+| Часовой пояс архива | `POST /api/v1/workspaces` сохраняет проверенную IANA-зону (`app.create_workspace(..., p_timezone)`, ревизия 0003); `GET /api/v1/session` и `POST /api/v1/sessions` отдают `timezone`, для архивов без зоны `Europe/Moscow`. Для агента документов: зону архива читает `app.modules.auth.repository.workspace_timezone(db, workspace_id)` внутри `workspace_tx` | `f83f0b8` |
+
+Новый интерфейс лимита: `from app.core.ratelimit import RateBudget, deferred_rate_limit`; параметр маршрута `budget: Annotated[RateBudget, Depends(deferred_rate_limit(POLICY))]` перед параметром сессии, в сервисе `await budget.consume()` в точке принятия и `await budget.refund()` при сбое после неё.
+
+| Команда (из `apps/api`) | Результат |
+|---|---|
+| `uv run ruff check --config pyproject.toml . ../../infra`, `ruff format --check` | All checks passed, 117 files formatted (шаг `pnpm --filter web lint` из `make lint` в этой оболочке не запускался: нет `pnpm` в PATH) |
+| `uv run pytest tests/unit` | 235 passed (новые: `gcra_peek`, `gcra_refund`) |
+| `uv run pytest tests/unit tests/integration/test_auth.py tests/integration/test_workspace.py tests/integration/test_errors_api.py tests/integration/test_ratelimit_api.py tests/integration/test_security_headers.py` | 293 passed (новые: 412 → 428 → 403 → 202 в течение часа с заголовками `r=1;t=0` и затем `r=0;t=3600`, исчерпанный бюджет → 429 без удаления, зона сохраняется и по умолчанию Москва) |
+| `CONTRACT_BLOCK=6 uv run pytest tests/contract/test_openapi_diff.py` | 39 passed |
+
+Замечание по стенду тестов: Docker Desktop сейчас нестабильно публикует порт MinIO (`Port mapping ... port 9000 is not available`), прогон приходилось повторять до 3 раз. В Docker висят десятки контейнеров `pgsty/minio` без проекта compose (утечки testcontainers при `TESTCONTAINERS_RYUK_DISABLED=true` у нескольких агентов); я их не удалял, часть может принадлежать идущим прогонам.
