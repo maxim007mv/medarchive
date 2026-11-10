@@ -3,8 +3,29 @@ import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import type { ReactNode } from "react";
 import { vi } from "vitest";
 
+import { ToastProvider } from "@/components/ui/toast";
 import { setCsrfToken } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
+
+// jsdom has no ResizeObserver; Radix radio and checkbox measure themselves with it.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
+// …and no matchMedia, which the theme switch in the header reads.
+window.matchMedia ??= (query: string) =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  }) satisfies MediaQueryList;
 
 type Handler = (request: Request) => Response | Promise<Response>;
 
@@ -69,6 +90,57 @@ export function makeDocument(
   };
 }
 
+/** Stand-in for the storage XHR of presigned POST: the test drives progress and the outcome. */
+export class FakeXhr {
+  static instances: FakeXhr[] = [];
+  upload: { onprogress?: (event: ProgressEvent) => void } = {};
+  status = 0;
+  url = "";
+  body?: FormData;
+  onload?: () => void;
+  onerror?: () => void;
+  onabort?: () => void;
+  constructor() {
+    FakeXhr.instances.push(this);
+  }
+  open(_method: string, url: string) {
+    this.url = url;
+  }
+  send(body: FormData) {
+    this.body = body;
+  }
+  abort() {
+    this.onabort?.();
+  }
+  progress(percent: number) {
+    this.upload.onprogress?.({
+      lengthComputable: true,
+      loaded: percent,
+      total: 100,
+    } as ProgressEvent);
+  }
+  succeed() {
+    this.progress(100);
+    this.status = 204;
+    this.onload?.();
+  }
+  static install() {
+    FakeXhr.instances = [];
+    vi.stubGlobal("XMLHttpRequest", FakeXhr);
+  }
+  static get last(): FakeXhr {
+    const xhr = FakeXhr.instances.at(-1);
+    if (!xhr) throw new Error("no storage upload was started");
+    return xhr;
+  }
+}
+
+export function pdfFile(name = "01-general-blood-test.pdf", size = 79_114): File {
+  const content = new Uint8Array(size);
+  content.set(new TextEncoder().encode("%PDF-1.4"));
+  return new File([content], name, { type: "application/pdf" });
+}
+
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -86,7 +158,9 @@ export function Wrapper({
 }) {
   return (
     <QueryClientProvider client={client}>
-      <NuqsTestingAdapter searchParams={searchParams}>{children}</NuqsTestingAdapter>
+      <NuqsTestingAdapter searchParams={searchParams}>
+        <ToastProvider>{children}</ToastProvider>
+      </NuqsTestingAdapter>
     </QueryClientProvider>
   );
 }
