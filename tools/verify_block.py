@@ -110,7 +110,7 @@ class Gate:
             done = subprocess.run(
                 command,
                 cwd=cwd,
-                env={**os.environ, **STACK_ENV, **(env or {})},
+                env={**child_env(), **(env or {})},
                 capture_output=True,
                 text=True,
                 timeout=timeout_s,
@@ -146,6 +146,12 @@ class Gate:
             summarize=summarize,
             timeout_s=2400,
         )
+
+
+def child_env() -> dict[str, str]:
+    """The stack ports for every child; without this script's own venv, which `uv run` sets."""
+    inherited = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    return {**inherited, **STACK_ENV}
 
 
 def exit_code(done: subprocess.CompletedProcess[str]) -> tuple[bool, str]:
@@ -273,7 +279,7 @@ def compose(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["docker", "compose", "-p", PROJECT, *args],
         cwd=WORKTREE,
-        env={**os.environ, **STACK_ENV},
+        env=child_env(),
         capture_output=True,
         text=True,
         check=False,
