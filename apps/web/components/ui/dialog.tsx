@@ -60,7 +60,7 @@ export function Dialog({
               if (returnFocusTo.current instanceof HTMLElement) returnFocusTo.current.focus();
             }}
             className={cn(
-              "animate-sheet-in bg-raised pb-safe text-text shadow-3 flex max-h-full w-full flex-col rounded-t-2xl",
+              "animate-sheet-in bg-raised pb-safe text-text shadow-3 relative flex max-h-full w-full flex-col rounded-t-2xl",
               "md:animate-dialog-in md:rounded-2xl md:pb-6",
               width === "form" ? "md:max-w-dialog-form" : "md:max-w-dialog-confirm",
             )}
@@ -69,23 +69,13 @@ export function Dialog({
               aria-hidden
               className="bg-border mx-auto mt-2 h-1 w-9 shrink-0 rounded-full md:hidden"
             />
-            <div className="flex items-start gap-4 px-4 pt-4 md:px-6 md:pt-6">
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <RadixDialog.Title className="text-h2">{title}</RadixDialog.Title>
-                {description && (
-                  <RadixDialog.Description className="text-body text-text2">
-                    {description}
-                  </RadixDialog.Description>
-                )}
-              </div>
-              <RadixDialog.Close asChild>
-                <IconButton
-                  icon={X}
-                  size="sm"
-                  aria-label={texts["common.close"]}
-                  className="-mt-1 -mr-1.5"
-                />
-              </RadixDialog.Close>
+            <div className="flex flex-col gap-2 px-4 pt-4 pr-12 md:px-6 md:pt-6 md:pr-12">
+              <RadixDialog.Title className="text-h2">{title}</RadixDialog.Title>
+              {description && (
+                <RadixDialog.Description className="text-body text-text2">
+                  {description}
+                </RadixDialog.Description>
+              )}
             </div>
             {children && (
               <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-4 pt-5 md:px-6">
@@ -103,6 +93,15 @@ export function Dialog({
                 {footer}
               </div>
             )}
+            {/* Last in the DOM, so initial focus lands on the content, not on the cross. */}
+            <RadixDialog.Close asChild>
+              <IconButton
+                icon={X}
+                size="sm"
+                aria-label={texts["common.close"]}
+                className="absolute top-6 right-2.5 md:top-5 md:right-5"
+              />
+            </RadixDialog.Close>
           </RadixDialog.Content>
         </RadixDialog.Overlay>
       </RadixDialog.Portal>

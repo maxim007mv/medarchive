@@ -8,6 +8,7 @@ import { t, texts } from "@/lib/texts";
 import { seriousViolations } from "./axe";
 import { Button } from "./button";
 import { Dialog, DialogClose } from "./dialog";
+import { Input } from "./input";
 
 function DeleteConfirm({ onDelete }: { onDelete: () => void }) {
   const [open, setOpen] = useState(false);
@@ -86,4 +87,14 @@ test("FE-06: the cross is named and the dialog has no serious axe violations", a
 
   expect(screen.getByRole("button", { name: texts["common.close"] })).toBeInTheDocument();
   expect(await seriousViolations(document.body)).toEqual([]);
+});
+
+test("FE-06: a form dialog starts on its first field, not on the cross", async () => {
+  render(
+    <Dialog open onOpenChange={() => undefined} title={texts["upload.title"]}>
+      <Input label={texts["upload.name.label"]} />
+    </Dialog>,
+  );
+
+  expect(await screen.findByRole("textbox", { name: texts["upload.name.label"] })).toHaveFocus();
 });
