@@ -22,19 +22,21 @@ export function RowMenu({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
-  // The element that opened the menu: the trigger, as clicking or Enter focuses it.
+  // Taken from the click: WebKit does not focus a button that is clicked.
   const openerRef = useRef<HTMLElement | null>(null);
 
-  function changeOpen(next: boolean) {
-    if (next && document.activeElement instanceof HTMLElement)
-      openerRef.current = document.activeElement;
-    setOpen(next);
-  }
-
   return (
-    <Popover.Root open={open} onOpenChange={changeOpen}>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <IconButton icon={Ellipsis} size="sm" aria-label={label} aria-haspopup="menu" />
+        <IconButton
+          icon={Ellipsis}
+          size="sm"
+          aria-label={label}
+          aria-haspopup="menu"
+          onClick={(event) => {
+            openerRef.current = event.currentTarget;
+          }}
+        />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
