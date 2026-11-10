@@ -1,4 +1,4 @@
-.PHONY: setup secrets up down lint typecheck test e2e ci images gen-api fixtures \
+.PHONY: setup secrets up down lint typecheck test e2e ci images gen-api fixtures seed \
 	contract a11y visual visual-baseline security audit-python audit-node gitleaks trivy zap load \
 	alerts verify-block
 
@@ -65,6 +65,14 @@ gen-api:
 
 fixtures:
 	uv run qa/fixtures/generate.py
+
+# BE-17: the six task fixtures into a new archive (prints its access key) or into WORKSPACE=<id>.
+# Needs the stack from `make up`.
+seed:
+	docker compose run --rm --no-deps \
+		-v "$(CURDIR)/qa/fixtures/manifest.json:/seed/qa/fixtures/manifest.json:ro" \
+		-v "$(CURDIR)/MedArchive/05_qa/fixtures:/seed/MedArchive/05_qa/fixtures:ro" \
+		api python -m app.cli seed --root /seed $(if $(WORKSPACE),--workspace $(WORKSPACE),--new)
 
 # QA-02: app.openapi() against openapi.yaml for blocks 1..BLOCK, then Schemathesis against the stack.
 contract:
