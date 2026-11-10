@@ -1,7 +1,15 @@
 "use client";
 
 import * as RadixToast from "@radix-ui/react-toast";
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import { texts } from "@/lib/texts";
 
@@ -18,10 +26,19 @@ const DEFAULT_DURATION_MS = 4000;
 
 const ShowToastContext = createContext<((toast: ToastOptions) => void) | null>(null);
 
+const subscribeToNothing = () => () => undefined;
+
 /** Toasts at the bottom centre, announced politely (FE-07, brandbook §10). */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ShownToast[]>([]);
   const nextId = useRef(0);
+  // The viewport is rendered after hydration: Radix server-renders it with a style attribute,
+  // which CSP style-src 'self' blocks, and a toast can only appear on the client anyway.
+  const isClient = useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
 
   const show = useCallback((toast: ToastOptions) => {
     nextId.current += 1;
@@ -60,10 +77,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           )}
         </RadixToast.Root>
       ))}
-      <RadixToast.Viewport
-        label={texts["app.name"]}
-        className="pb-safe fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 px-4 outline-hidden md:pb-8"
-      />
+      {isClient && (
+        <RadixToast.Viewport
+          label={texts["app.name"]}
+          className="pb-safe fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 px-4 outline-hidden md:pb-8"
+        />
+      )}
     </RadixToast.Provider>
   );
 }
