@@ -8,6 +8,9 @@ import { rows, SAVE_TIMEOUT_MS, uploadDialog } from "./helpers";
 const [bloodTest] = sources;
 
 /** Presses Tab until the focused element matches, failing after `limit` presses. */
+/** Safari moves focus only between form fields on Tab; Option+Tab walks every control. */
+let TAB = "Tab";
+
 async function tabTo(
   page: Page,
   matches: () => Promise<boolean>,
@@ -15,7 +18,7 @@ async function tabTo(
 ): Promise<void> {
   for (let step = 0; step < limit; step += 1) {
     if (await matches()) return;
-    await page.keyboard.press("Tab");
+    await page.keyboard.press(TAB);
   }
   throw new Error("the element was not reached with Tab");
 }
@@ -43,7 +46,8 @@ test.describe("keyboard and phone layout", () => {
   test(
     "TC-111 add, find, open and delete with the keyboard only",
     { tag: ["@b6", "@P0", "@TC-111"] },
-    async ({ page, freshArchive }) => {
+    async ({ page, freshArchive, browserName }) => {
+      TAB = browserName === "webkit" ? "Alt+Tab" : "Tab";
       await freshArchive.api.addSource(sources[1]!);
       await page.goto("/");
       await expect(rows(page)).toHaveCount(1);
@@ -66,7 +70,7 @@ test.describe("keyboard and phone layout", () => {
       await dialog.getByLabel("Название").focus();
       await page.keyboard.press("ControlOrMeta+A");
       await page.keyboard.type("Общий анализ крови");
-      await page.keyboard.press("Tab");
+      await page.keyboard.press(TAB);
       await page.keyboard.press("Space");
       await tabTo(
         page,
@@ -113,7 +117,7 @@ test.describe("keyboard and phone layout", () => {
       await expect(
         confirm.getByRole("button", { name: "Отмена" }),
       ).toBeFocused();
-      await page.keyboard.press("Tab");
+      await page.keyboard.press(TAB);
       await page.keyboard.press("Enter");
 
       await expect(
