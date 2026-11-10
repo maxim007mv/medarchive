@@ -27,6 +27,8 @@ paths:
       summary: Создать архив, сессию и принять согласие
       tags:
       - workspaces
+      description: 'Без consent.accepted = true ответ 422 validation_error (схема требует const true), архив не создаётся. Повтор с тем же Idempotency-Key возвращает тот же архив и тот же access_key, но
+        новую сессию: новые Set-Cookie и csrf_token (ADR-045).'
       security: []
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
@@ -38,7 +40,7 @@ paths:
               $ref: '#/components/schemas/WorkspaceCreate'
             example:
               consent:
-                policy_version: '2026-11-01'
+                policy_version: '2026-11-10'
                 accepted: true
               timezone: Europe/Moscow
       responses:
@@ -65,8 +67,16 @@ paths:
               $ref: '#/components/headers/NoStore'
             Set-Cookie:
               $ref: '#/components/headers/SetSession'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
-          description: 'Ошибка, коды: validation_error, idempotency_key_reused'
+          description: 'Ошибка, коды: validation_error (в том числе consent.accepted не true), idempotency_key_reused'
           content:
             application/problem+json:
               schema:
@@ -86,6 +96,13 @@ paths:
                     status: 422
                     code: idempotency_key_reused
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           description: 'Ошибка, коды: idempotency_key_missing'
           content:
@@ -100,6 +117,13 @@ paths:
                     status: 400
                     code: idempotency_key_missing
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '409':
           description: 'Ошибка, коды: idempotency_in_progress'
           content:
@@ -114,20 +138,13 @@ paths:
                     status: 409
                     code: idempotency_in_progress
                     request_id: req_01930c9a
-        '403':
-          description: 'Ошибка, коды: consent_required'
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-              examples:
-                consent_required:
-                  value:
-                    type: urn:problem-type:medarchive:consent_required
-                    title: Чтобы хранить медицинские документы, нужно ваше согласие
-                    status: 403
-                    code: consent_required
-                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -149,6 +166,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -163,6 +182,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/session:
     get:
       operationId: session.get
@@ -182,6 +208,12 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -196,6 +228,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: scope_insufficient'
           content:
@@ -210,6 +249,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -231,6 +277,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -245,12 +293,21 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/sessions:
     post:
       operationId: sessions.create
       summary: Открыть архив по ключу доступа
       tags:
       - sessions
+      description: 'Лимит 5 попыток за 15 минут на IP: пятая неверная попытка получает 401 access_key_invalid, шестая и следующие до конца окна получают 429 rate_limited с Retry-After. Время ответа одинаковое
+        для неизвестного lookup_id и неверного секрета.'
       security: []
       requestBody:
         required: true
@@ -272,6 +329,12 @@ paths:
               $ref: '#/components/headers/NoStore'
             Set-Cookie:
               $ref: '#/components/headers/SetSession'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
           description: 'Ошибка, коды: validation_error'
           content:
@@ -286,6 +349,13 @@ paths:
                     status: 422
                     code: validation_error
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: access_key_invalid'
           content:
@@ -300,6 +370,13 @@ paths:
                     status: 401
                     code: access_key_invalid
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -321,6 +398,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -335,6 +414,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/sessions/current:
     delete:
       operationId: sessions.delete
@@ -349,6 +435,13 @@ paths:
       responses:
         '204':
           description: Сессия отозвана
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -363,6 +456,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient'
           content:
@@ -384,6 +484,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -405,6 +512,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -419,6 +528,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/workspace:
     get:
       operationId: workspace.get
@@ -440,6 +556,12 @@ paths:
               $ref: '#/components/headers/NoStore'
             ETag:
               $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -454,6 +576,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: scope_insufficient'
           content:
@@ -468,6 +597,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -489,6 +625,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -503,6 +641,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
     delete:
       operationId: workspace.delete
       summary: Удалить архив целиком (отзыв согласия)
@@ -527,6 +672,12 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '428':
           description: 'Ошибка, коды: precondition_required'
           content:
@@ -541,6 +692,13 @@ paths:
                     status: 428
                     code: precondition_required
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '412':
           description: 'Ошибка, коды: version_conflict'
           content:
@@ -555,6 +713,13 @@ paths:
                     status: 412
                     code: version_conflict
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -569,6 +734,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient'
           content:
@@ -590,6 +762,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -611,6 +790,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -625,6 +806,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/workspace/access-key:
     post:
       operationId: workspace.rotateKey
@@ -650,6 +838,14 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           description: 'Ошибка, коды: idempotency_key_missing'
           content:
@@ -664,6 +860,13 @@ paths:
                     status: 400
                     code: idempotency_key_missing
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
           description: 'Ошибка, коды: idempotency_key_reused'
           content:
@@ -678,6 +881,13 @@ paths:
                     status: 422
                     code: idempotency_key_reused
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '409':
           description: 'Ошибка, коды: idempotency_in_progress'
           content:
@@ -692,6 +902,13 @@ paths:
                     status: 409
                     code: idempotency_in_progress
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -706,6 +923,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient'
           content:
@@ -727,6 +951,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -748,6 +979,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -762,6 +995,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/document-types:
     get:
       operationId: documentTypes.list
@@ -775,8 +1015,16 @@ paths:
         '200':
           description: OK
           headers:
+            Cache-Control:
+              $ref: '#/components/headers/PublicMaxAge'
             ETag:
               $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -803,6 +1051,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: scope_insufficient'
           content:
@@ -817,6 +1072,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -838,6 +1100,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -852,13 +1116,22 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/uploads:
     post:
       operationId: uploads.create
       summary: Получить presigned POST для PDF
       tags:
       - uploads
-      description: Клиент отправляет multipart/form-data прямо в url с полями fields и файлом последним полем. Политика содержит content-length-range 1..20971520 и точный key.
+      description: 'Клиент отправляет multipart/form-data прямо в url с полями fields и файлом последним полем. Политика содержит content-length-range 1..20971520 и точный key. Три срока: подпись политики
+        действует 15 минут (expires_at); строка uploads живёт 1 час, после этого POST /api/v1/documents с этим upload_id даёт 410 upload_expired; правило жизненного цикла бакета карантина удаляет объект
+        через 1 день.'
       security:
       - session:
         - documents:write
@@ -872,6 +1145,7 @@ paths:
             schema:
               $ref: '#/components/schemas/UploadCreate'
             example:
+              original_name: 01-general-blood-test.pdf
               size_bytes: 79114
               content_type: application/pdf
       responses:
@@ -897,6 +1171,14 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
           description: 'Ошибка, коды: validation_error, idempotency_key_reused'
           content:
@@ -918,6 +1200,13 @@ paths:
                     status: 422
                     code: idempotency_key_reused
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '415':
           description: 'Ошибка, коды: not_pdf'
           content:
@@ -932,6 +1221,13 @@ paths:
                     status: 415
                     code: not_pdf
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '413':
           description: 'Ошибка, коды: file_too_large'
           content:
@@ -946,6 +1242,13 @@ paths:
                     status: 413
                     code: file_too_large
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           description: 'Ошибка, коды: idempotency_key_missing'
           content:
@@ -960,6 +1263,13 @@ paths:
                     status: 400
                     code: idempotency_key_missing
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '409':
           description: 'Ошибка, коды: idempotency_in_progress'
           content:
@@ -974,6 +1284,13 @@ paths:
                     status: 409
                     code: idempotency_in_progress
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -988,6 +1305,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient'
           content:
@@ -1009,6 +1333,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -1030,6 +1361,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -1044,6 +1377,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/suggestions:
     post:
       operationId: suggestions.create
@@ -1082,6 +1422,14 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '404':
           description: 'Ошибка, коды: upload_not_found'
           content:
@@ -1096,6 +1444,13 @@ paths:
                     status: 404
                     code: upload_not_found
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '410':
           description: 'Ошибка, коды: upload_expired'
           content:
@@ -1110,6 +1465,13 @@ paths:
                     status: 410
                     code: upload_expired
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '409':
           description: 'Ошибка, коды: upload_incomplete, idempotency_in_progress'
           content:
@@ -1131,6 +1493,13 @@ paths:
                     status: 409
                     code: idempotency_in_progress
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           description: 'Ошибка, коды: idempotency_key_missing'
           content:
@@ -1145,6 +1514,13 @@ paths:
                     status: 400
                     code: idempotency_key_missing
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
           description: 'Ошибка, коды: idempotency_key_reused'
           content:
@@ -1159,6 +1535,13 @@ paths:
                     status: 422
                     code: idempotency_key_reused
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -1173,6 +1556,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient'
           content:
@@ -1194,6 +1584,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited, ai_busy'
           content:
@@ -1222,6 +1619,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '503':
           description: 'Ошибка, коды: ai_unavailable'
           content:
@@ -1236,6 +1635,13 @@ paths:
                     status: 503
                     code: ai_unavailable
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -1250,6 +1656,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/documents:
     get:
       operationId: documents.list
@@ -1285,6 +1698,7 @@ paths:
                   document_date: '2026-04-10'
                   uploaded_at: '2026-11-10T16:04:40Z'
                   has_note: true
+                  size_bytes: 78083
                   version: 2
                 - id: 01930c71-2a3b-7c4d-9e5f-6a7b8c9d0e1f
                   title: Общий анализ крови
@@ -1292,6 +1706,7 @@ paths:
                   document_date: '2026-04-08'
                   uploaded_at: '2026-11-10T16:02:11Z'
                   has_note: true
+                  size_bytes: 79114
                   version: 3
                 - id: 01930c71-0000-7000-8000-000000000002
                   title: Биохимический анализ крови
@@ -1299,6 +1714,7 @@ paths:
                   document_date: '2026-04-08'
                   uploaded_at: '2026-11-10T16:03:05Z'
                   has_note: false
+                  size_bytes: 78110
                   version: 1
                 total: 6
                 matched: 3
@@ -1307,6 +1723,12 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
           description: 'Ошибка, коды: validation_error, date_range_invalid'
           content:
@@ -1328,6 +1750,13 @@ paths:
                     status: 422
                     code: date_range_invalid
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           description: 'Ошибка, коды: invalid_page_token'
           content:
@@ -1342,6 +1771,13 @@ paths:
                     status: 400
                     code: invalid_page_token
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -1356,6 +1792,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: scope_insufficient'
           content:
@@ -1370,6 +1813,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -1391,6 +1841,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -1405,6 +1857,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
     post:
       operationId: documents.create
       summary: Создать документ из загрузки
@@ -1457,6 +1916,14 @@ paths:
               schema:
                 type: string
               description: /api/v1/documents/{id}
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
           description: 'Ошибка, коды: validation_error, title_required, title_too_long, date_invalid, date_in_future, note_too_long, type_unknown, pdf_unreadable, pdf_encrypted, idempotency_key_reused'
           content:
@@ -1534,6 +2001,13 @@ paths:
                     status: 422
                     code: idempotency_key_reused
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '415':
           description: 'Ошибка, коды: not_pdf'
           content:
@@ -1548,6 +2022,13 @@ paths:
                     status: 415
                     code: not_pdf
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '404':
           description: 'Ошибка, коды: upload_not_found'
           content:
@@ -1562,6 +2043,13 @@ paths:
                     status: 404
                     code: upload_not_found
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '410':
           description: 'Ошибка, коды: upload_expired'
           content:
@@ -1576,6 +2064,13 @@ paths:
                     status: 410
                     code: upload_expired
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '409':
           description: 'Ошибка, коды: upload_incomplete, idempotency_in_progress'
           content:
@@ -1597,6 +2092,13 @@ paths:
                     status: 409
                     code: idempotency_in_progress
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           description: 'Ошибка, коды: idempotency_key_missing'
           content:
@@ -1611,6 +2113,13 @@ paths:
                     status: 400
                     code: idempotency_key_missing
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -1625,6 +2134,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient, consent_required'
           content:
@@ -1653,6 +2169,13 @@ paths:
                     status: 403
                     code: consent_required
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -1674,6 +2197,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '503':
           description: 'Ошибка, коды: storage_unavailable'
           content:
@@ -1688,6 +2213,13 @@ paths:
                     status: 503
                     code: storage_unavailable
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -1702,6 +2234,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/documents/{document_id}:
     parameters:
     - $ref: '#/components/parameters/DocumentId'
@@ -1728,8 +2267,21 @@ paths:
               $ref: '#/components/headers/NoStore'
             ETag:
               $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '304':
           description: Не изменился (If-None-Match)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '404':
           description: 'Ошибка, коды: not_found'
           content:
@@ -1744,6 +2296,13 @@ paths:
                     status: 404
                     code: not_found
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -1758,6 +2317,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: scope_insufficient'
           content:
@@ -1772,6 +2338,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -1793,6 +2366,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -1807,6 +2382,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
     patch:
       operationId: documents.update
       summary: Изменить название, тип, дату или заметку
@@ -1848,6 +2430,12 @@ paths:
               $ref: '#/components/headers/NoStore'
             ETag:
               $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
           description: 'Ошибка, коды: validation_error, title_required, title_too_long, date_invalid, date_in_future, note_too_long, type_unknown'
           content:
@@ -1904,6 +2492,13 @@ paths:
                     status: 422
                     code: type_unknown
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '404':
           description: 'Ошибка, коды: not_found'
           content:
@@ -1918,6 +2513,13 @@ paths:
                     status: 404
                     code: not_found
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '428':
           description: 'Ошибка, коды: precondition_required'
           content:
@@ -1932,6 +2534,13 @@ paths:
                     status: 428
                     code: precondition_required
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '412':
           description: 'Ошибка, коды: version_conflict'
           content:
@@ -1946,6 +2555,13 @@ paths:
                     status: 412
                     code: version_conflict
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -1960,6 +2576,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient'
           content:
@@ -1981,6 +2604,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -2002,6 +2632,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -2016,6 +2648,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
     delete:
       operationId: documents.delete
       summary: Удалить документ
@@ -2030,6 +2669,13 @@ paths:
       responses:
         '204':
           description: Удалён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '404':
           description: 'Ошибка, коды: not_found'
           content:
@@ -2044,6 +2690,13 @@ paths:
                     status: 404
                     code: not_found
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '428':
           description: 'Ошибка, коды: precondition_required'
           content:
@@ -2058,6 +2711,13 @@ paths:
                     status: 428
                     code: precondition_required
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '412':
           description: 'Ошибка, коды: version_conflict'
           content:
@@ -2072,6 +2732,13 @@ paths:
                     status: 412
                     code: version_conflict
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -2086,6 +2753,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient'
           content:
@@ -2107,6 +2781,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -2128,6 +2809,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -2142,6 +2825,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/documents/{document_id}/content:
     parameters:
     - $ref: '#/components/parameters/DocumentId'
@@ -2189,6 +2879,12 @@ paths:
               schema:
                 type: string
                 const: bytes
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/pdf:
               schema:
@@ -2201,6 +2897,32 @@ paths:
               schema:
                 type: string
                 format: binary
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Content-Disposition:
+              schema:
+                type: string
+            Content-Security-Policy:
+              schema:
+                type: string
+                const: sandbox
+            X-Content-Type-Options:
+              schema:
+                type: string
+                const: nosniff
+            Accept-Ranges:
+              schema:
+                type: string
+                const: bytes
+            Content-Range:
+              $ref: '#/components/headers/ContentRange'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '404':
           description: 'Ошибка, коды: not_found'
           content:
@@ -2215,6 +2937,13 @@ paths:
                     status: 404
                     code: not_found
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -2229,6 +2958,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: scope_insufficient'
           content:
@@ -2243,6 +2979,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -2264,6 +3007,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '503':
           description: 'Ошибка, коды: storage_unavailable'
           content:
@@ -2278,6 +3023,13 @@ paths:
                     status: 503
                     code: storage_unavailable
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -2292,6 +3044,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/exports:
     post:
       operationId: exports.create
@@ -2331,6 +3090,14 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '422':
           description: 'Ошибка, коды: validation_error, idempotency_key_reused'
           content:
@@ -2352,6 +3119,13 @@ paths:
                     status: 422
                     code: idempotency_key_reused
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           description: 'Ошибка, коды: idempotency_key_missing'
           content:
@@ -2366,6 +3140,13 @@ paths:
                     status: 400
                     code: idempotency_key_missing
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '409':
           description: 'Ошибка, коды: idempotency_in_progress'
           content:
@@ -2380,6 +3161,13 @@ paths:
                     status: 409
                     code: idempotency_in_progress
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -2394,6 +3182,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: csrf_failed, scope_insufficient'
           content:
@@ -2415,6 +3210,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -2436,6 +3238,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -2450,6 +3254,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /api/v1/exports/{export_id}/content:
     parameters:
     - name: export_id
@@ -2476,6 +3287,12 @@ paths:
               schema:
                 type: string
               example: attachment; filename="medarchive_2026-11-10.zip"
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/zip:
               schema:
@@ -2495,6 +3312,13 @@ paths:
                     status: 404
                     code: not_found
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: 'Ошибка, коды: unauthenticated'
           content:
@@ -2509,6 +3333,13 @@ paths:
                     status: 401
                     code: unauthenticated
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '403':
           description: 'Ошибка, коды: scope_insufficient'
           content:
@@ -2523,6 +3354,13 @@ paths:
                     status: 403
                     code: scope_insufficient
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '429':
           description: 'Ошибка, коды: rate_limited'
           content:
@@ -2544,6 +3382,8 @@ paths:
               $ref: '#/components/headers/RateLimit'
             RateLimit-Policy:
               $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '500':
           description: 'Ошибка, коды: internal'
           content:
@@ -2558,6 +3398,13 @@ paths:
                     status: 500
                     code: internal
                     request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
   /healthz:
     get:
       operationId: health.live
@@ -2568,6 +3415,9 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
   /readyz:
     get:
       operationId: health.ready
@@ -2578,8 +3428,14 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
         '503':
           description: Не готов
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
 components:
   securitySchemes:
     session:
@@ -2814,6 +3670,11 @@ components:
     UploadCreate:
       type: object
       properties:
+        original_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Имя файла на устройстве пользователя; хранится зашифрованным и возвращается в Document.file.original_name
         size_bytes:
           type: integer
           minimum: 1
@@ -2822,6 +3683,7 @@ components:
           type: string
           const: application/pdf
       required:
+      - original_name
       - size_bytes
       - content_type
       additionalProperties: false
@@ -2981,6 +3843,10 @@ components:
         uploaded_at: *id003
         has_note:
           type: boolean
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 20971520
         version:
           type: integer
       required:
@@ -2990,6 +3856,7 @@ components:
       - document_date
       - uploaded_at
       - has_note
+      - size_bytes
       - version
       additionalProperties: false
     DocumentList:
@@ -3019,8 +3886,10 @@ components:
       properties:
         q:
           type: string
-          minLength: 3
           maxLength: 100
+          pattern: ^\s*$|^\s*(\S\s*){3,}$
+          description: Подстрока в названии без учёта регистра и ё/е (ADR-046). Пустая строка или только пробелы = без поиска; 1 или 2 непробельных символа = 422 validation_error; от 3 непробельных символов
+            = поиск
         type:
           type: array
           items: *id006
@@ -3087,7 +3956,7 @@ components:
         type: string
         minLength: 16
         maxLength: 64
-      description: Один ключ на одно намерение пользователя; хранится 24 ч (draft-ietf-httpapi-idempotency-key-header)
+      description: 'Один ключ на одно намерение пользователя; хранится 24 ч (draft-ietf-httpapi-idempotency-key-header). Повтор с тем же телом возвращает сохранённый ответ с Idempotent-Replayed: true (ADR-045)'
     IfMatch:
       name: If-Match
       in: header
@@ -3120,9 +3989,10 @@ components:
       required: false
       schema:
         type: string
-        minLength: 3
         maxLength: 100
-      description: Подстрока в названии без учёта регистра и ё/е
+        pattern: ^\s*$|^\s*(\S\s*){3,}$
+      description: Подстрока в названии без учёта регистра и ё/е (ADR-046). Пустая строка или только пробелы = без поиска; 1 или 2 непробельных символа = 422 validation_error; от 3 непробельных символов
+        = поиск
     Type:
       name: type
       in: query
@@ -3166,7 +4036,7 @@ components:
       required: false
       schema:
         type: boolean
-      description: Только документы без даты документа
+      description: Только документы без даты документа. При undated=true параметры date_field, from и to игнорируются, undated_excluded = 0
     Tz:
       name: tz
       in: query
@@ -3195,14 +4065,14 @@ components:
         minimum: 1
         maximum: 200
         default: 50
-      description: Больше 200 урезается до 200
+      description: Больше 200 = 422 validation_error (значение не урезается)
     PageToken:
       name: page_token
       in: query
       required: false
       schema:
         type: string
-      description: Непрозрачный курсор (AIP-158)
+      description: 'Непрозрачный курсор (AIP-158). В токен входит хэш q, type, date_field, from, to, undated, tz и order_by: токен с другим значением любого из них даёт 400 invalid_page_token'
   headers:
     NoStore:
       schema:
@@ -3221,11 +4091,34 @@ components:
       schema:
         type: string
       example: '"burst";r=27;t=41'
+      description: На каждом ответе лимитируемого маршрута (все маршруты, кроме /healthz и /readyz)
     RateLimitPolicy:
       schema:
         type: string
       example: '"burst";q=30;w=60'
+      description: 'Квота маршрута из 06-api-contract.md, раздел 3. Лимит «общий» = 300 запросов в минуту на сессию: "general";q=300;w=60'
     SetSession:
       schema:
         type: string
       example: __Host-ma_sid=...; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000
+    RequestId:
+      schema:
+        type: string
+        maxLength: 64
+      example: req_01930c9a
+      description: Есть в каждом ответе; тот же request_id в теле ошибки и в логах
+    IdempotentReplayed:
+      schema:
+        type: string
+        const: 'true'
+      description: 'Только в ответе на повтор с тем же Idempotency-Key и тем же телом: сохранённый статус и тело первой попытки (ADR-045)'
+    ContentRange:
+      required: true
+      schema:
+        type: string
+      example: bytes 0-65535/79114
+    PublicMaxAge:
+      schema:
+        type: string
+        const: public, max-age=3600
+      description: Справочник не содержит персональных данных и кэшируется на 1 час

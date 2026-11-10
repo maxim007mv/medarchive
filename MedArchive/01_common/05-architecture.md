@@ -31,7 +31,7 @@
 | Контейнер | Технология | Ответственность | Масштабирование |
 |---|---|---|---|
 | web | Next.js 15, Node 22 | SSR каркаса и первой страницы списка, UI | Yandex Serverless Containers, без состояния |
-| api | FastAPI, uvicorn, Python 3.12 | Сессии, скоупы, CRUD, presigned загрузка, проверка PDF, шифрование, экспорт | 2 до N реплик, без состояния; DEK в памяти процесса до 5 минут |
+| api | FastAPI, uvicorn, Python 3.12 | Сессии, скоупы, CRUD, presigned загрузка, проверка PDF, шифрование, экспорт | 2 до N реплик, без состояния; открытые ключи пространства только на время запроса (ADR-041) |
 | db | Managed PostgreSQL 17 (проверено на 18), PgBouncer transaction | Пространства, документы (поля шифртекстом), сессии, аудит | 2 хоста в разных зонах, ежедневная копия + PITR 7 дней |
 | storage | Yandex Object Storage (MinIO локально) | `ma-quarantine` (сырые загрузки, жизненный цикл 1 день), `ma-docs` (только шифртекст Tink) | Управляемое, публичный доступ запрещён |
 | kms | Yandex KMS | KEK, обёртка DEK пространств | Управляемое |
@@ -67,7 +67,7 @@ app/
 
 ```
 Browser                         API                                  Object Storage            KMS        DB
-  | POST /api/v1/uploads {size_bytes, content_type} + Idempotency-Key
+  | POST /api/v1/uploads {original_name, size_bytes, content_type} + Idempotency-Key
   |------------------------------>| size <= 20 МБ? иначе 413 file_too_large
   |                               | INSERT uploads(status=pending, expires_at=+1ч)
   |<-- 201 {upload_id, url, fields: policy c content-length-range 1..20971520, key}
@@ -78,7 +78,7 @@ Browser                         API                                  Object Stor
   |------------------------------>| 1. сессия -> workspace_id, скоуп documents:write, согласие действует
   |                               | 2. HEAD объекта: есть? иначе 409 upload_incomplete
   |                               | 3. чтение потоком: сигнатура %PDF-, pypdf открывает, нет шифрования, страницы
-  |                               | 4. DEK пространства (кэш 5 мин или Decrypt в KMS) -------------->|
+  |                               | 4. ключи пространства: расшифровка KEK на каждый запрос, без кэша (ADR-041) ->|
   |                               | 5. Streaming AEAD (AAD=document_id) -> ma-docs/ws/{ws}/{doc}.bin
   |                               | 6. транзакция: INSERT documents (title_ct, title_bidx, note_ct), document_files,
   |                               |    uploads.status=consumed, audit_log; uploaded_at = now() в БД -------------->|
