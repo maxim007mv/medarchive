@@ -19,6 +19,7 @@ from app.core.security import new_session_token
 from app.db.transaction import workspace_tx
 from app.modules.auth import repository
 from app.modules.auth.access_key import (
+    AccessKey,
     generate_access_key,
     hash_secret,
     parse_access_key,
@@ -29,6 +30,7 @@ from app.modules.auth.repository import IpPrefix
 from app.modules.auth.schemas import WorkspaceBrief, WorkspaceCreate
 
 WORKSPACE_CREATED_STATUS = 201
+ACCESS_KEY_ATTEMPTS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +83,6 @@ async def _create(
 ) -> CreatedWorkspace:
     workspace_id = new_id()
     keys, wrapped = kek.new_workspace_keys(workspace_id)
-    access_key = generate_access_key()
-    secret_hash = await asyncio.to_thread(hash_secret, access_key.secret)
     cookie, token_sha256 = new_session_token()
     async with workspace_tx(db, workspace_id, request_id=meta.request_id):
         created_at = await repository.create_workspace(
@@ -92,7 +92,7 @@ async def _create(
             policy_version=POLICY_VERSION,
             evidence_sha256=EVIDENCE_SHA256,
         )
-        await repository.issue_access_key(db, access_key.lookup_id, secret_hash)
+        access_key, _ = await issue_new_access_key(db)
         session = await _start_session(db, workspace_id, token_sha256, "session.create", meta)
         for action in ("workspace.create", "consent.accept", "access_key.issue"):
             await repository.add_audit(
@@ -136,6 +136,26 @@ async def _replay_creation(
         session = await _start_session(db, workspace_id, token_sha256, "session.create", meta)
     body = json.loads(keys.decrypt_field(claim.response_body_ct, _aad(workspace_id, key_sha256)))
     return CreatedWorkspace(body, _issued(workspace_id, session, cookie), replayed=True)
+
+
+async def issue_new_access_key(db: AsyncSession) -> tuple[AccessKey, bool]:
+    """Inside workspace_tx: a fresh key replaces the active one; True if one was revoked.
+
+    The 6-character lookup id is random, so it can hit an existing one; then a new key is drawn.
+    """
+    for _ in range(ACCESS_KEY_ATTEMPTS):
+        access_key = generate_access_key()
+        secret_hash = await asyncio.to_thread(hash_secret, access_key.secret)
+        try:
+            revoked_previous = await repository.issue_access_key(
+                db, access_key.lookup_id, secret_hash
+            )
+        except repository.LookupIdTakenError:
+            continue
+        if revoked_previous is None:
+            raise ProblemError(ErrorCode.UNAUTHENTICATED)
+        return access_key, revoked_previous
+    raise RuntimeError(f"no free access key lookup id in {ACCESS_KEY_ATTEMPTS} attempts")
 
 
 async def open_by_access_key(db: AsyncSession, typed_key: str, meta: RequestMeta) -> IssuedSession:

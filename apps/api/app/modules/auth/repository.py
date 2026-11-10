@@ -11,8 +11,10 @@ from ipaddress import IPv4Network, IPv6Network
 from uuid import UUID
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+_UNIQUE_VIOLATION = "23505"
 SESSION_IDLE_TTL = timedelta(days=30)
 SESSION_ABSOLUTE_TTL = timedelta(days=180)
 
@@ -140,15 +142,34 @@ async def revoke_session(db: AsyncSession, session_id: UUID) -> None:
     await db.execute(text("SELECT app.revoke_sessions(:session_id)"), {"session_id": session_id})
 
 
-async def issue_access_key(db: AsyncSession, lookup_id: str, secret_hash: str) -> bool:
-    """Inside workspace_tx: revoke the active key and add a new one; True if one was revoked."""
-    revoked_previous: bool = (
-        await db.execute(
-            text("SELECT revoked_previous FROM app.issue_access_key(:lookup_id, :secret_hash)"),
-            {"lookup_id": lookup_id, "secret_hash": secret_hash},
-        )
-    ).scalar_one()
-    return revoked_previous
+class LookupIdTakenError(Exception):
+    """Another key, live or revoked, already has this lookup id; issue a new key."""
+
+
+async def issue_access_key(db: AsyncSession, lookup_id: str, secret_hash: str) -> bool | None:
+    """Inside workspace_tx: revoke the active key and add a new one.
+
+    Returns whether a key was revoked, None if the workspace is deleted. A taken lookup id
+    rolls back only its savepoint, so the caller can retry in the same transaction.
+    """
+    try:
+        async with db.begin_nested():
+            row = (
+                await db.execute(
+                    text(
+                        "SELECT revoked_previous"
+                        " FROM app.issue_access_key(:lookup_id, :secret_hash)"
+                    ),
+                    {"lookup_id": lookup_id, "secret_hash": secret_hash},
+                )
+            ).one_or_none()
+    except IntegrityError as exc:
+        # The only unique constraint this insert can break is access_keys.lookup_id: the
+        # function locks the workspace before replacing its active key.
+        if getattr(exc.orig, "sqlstate", None) == _UNIQUE_VIOLATION:
+            raise LookupIdTakenError from exc
+        raise
+    return None if row is None else bool(row.revoked_previous)
 
 
 async def find_access_key(db: AsyncSession, lookup_id: str) -> FoundAccessKey | None:

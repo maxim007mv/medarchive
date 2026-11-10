@@ -1,6 +1,5 @@
 """Archive summary, key rotation and deletion (BE-04, BE-05, BE-10)."""
 
-import asyncio
 import hashlib
 from datetime import datetime
 
@@ -11,7 +10,7 @@ from app.core.deps import SessionContext, load_workspace_keys, session_tx
 from app.core.errors import ErrorCode, ProblemError
 from app.core.idempotency import Operation, StoredResponse, run_idempotent
 from app.modules.auth import repository as auth_repository
-from app.modules.auth.access_key import generate_access_key, hash_secret
+from app.modules.auth import service as auth_service
 from app.modules.auth.repository import IpPrefix
 from app.modules.workspace import repository
 from app.modules.workspace.schemas import AccessKeyIssued, DocumentTypeList, WorkspaceOut
@@ -69,12 +68,8 @@ async def rotate_access_key(
         keys = await load_workspace_keys(db, kek, session.workspace_id)
 
     async def issue() -> StoredResponse:
-        access_key = generate_access_key()
-        secret_hash = await asyncio.to_thread(hash_secret, access_key.secret)
         async with session_tx(db, session):
-            revoked_previous = await auth_repository.issue_access_key(
-                db, access_key.lookup_id, secret_hash
-            )
+            access_key, revoked_previous = await auth_service.issue_new_access_key(db)
             await auth_repository.add_audit(
                 db,
                 session.workspace_id,
