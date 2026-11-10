@@ -7,6 +7,8 @@
 | Что | Зачем | Статус |
 |---|---|---|
 | Ключи `empty.period.range` «за {from} – {to}», `empty.period.from` «с {from}», `empty.period.to` «по {to}» в `docs/texts.md` §10 и `lib/texts.ts` | Подстановка `{period}` в `empty.text.queryPeriod` и `empty.text.period` (D08); сейчас эти фразы есть только в абзаце под таблицей §10, генератор их не берёт | открыт |
+| `lib/policy.ts` из `docs/policy.md` тем же генератором, что `lib/texts.ts`: `export const policyVersion = "2026-11-10"` и `export const policyMarkdown = "…"` (байты файла) | Страница `/policy` и `consent.policy_version` в `POST /api/v1/workspaces`; `docs/` исключён из контекста Docker-сборки web (`.dockerignore`), читать файл при сборке нельзя | открыт |
+| Toast: провайдер и viewport внутри `Providers`, хук или функция показа с действием и длительностью (6 с для «Заметка очищена · Вернуть») | Тосты списка, заметки, удаления, ключа | открыт |
 
 ## Что сделано
 
