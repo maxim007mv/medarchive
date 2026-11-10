@@ -27,7 +27,7 @@ from app.modules.auth.access_key import (
 )
 from app.modules.auth.consent import EVIDENCE_SHA256, POLICY_VERSION
 from app.modules.auth.repository import IpPrefix
-from app.modules.auth.schemas import WorkspaceBrief, WorkspaceCreate
+from app.modules.auth.schemas import DEFAULT_TIMEZONE, WorkspaceBrief, WorkspaceCreate
 
 WORKSPACE_CREATED_STATUS = 201
 ACCESS_KEY_ATTEMPTS = 3
@@ -39,6 +39,13 @@ class IssuedSession:
     session_id: UUID
     cookie: str
     idle_expires_at: datetime
+    timezone: str
+
+
+@dataclass(frozen=True, slots=True)
+class SessionState:
+    idle_expires_at: datetime
+    timezone: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +78,7 @@ async def create_workspace(
     if not claim.is_new:
         return await _replay_creation(db, kek, claim, key_sha256, fingerprint, meta)
     try:
-        return await _create(db, kek, key_sha256, meta)
+        return await _create(db, kek, key_sha256, payload.timezone, meta)
     except Exception:
         async with db.begin():
             await repository.release_workspace_create_key(db, key_sha256)
@@ -79,7 +86,7 @@ async def create_workspace(
 
 
 async def _create(
-    db: AsyncSession, kek: Kek, key_sha256: bytes, meta: RequestMeta
+    db: AsyncSession, kek: Kek, key_sha256: bytes, timezone: str, meta: RequestMeta
 ) -> CreatedWorkspace:
     workspace_id = new_id()
     keys, wrapped = kek.new_workspace_keys(workspace_id)
@@ -91,9 +98,12 @@ async def _create(
             kek_key_id=kek.key_id,
             policy_version=POLICY_VERSION,
             evidence_sha256=EVIDENCE_SHA256,
+            timezone=timezone,
         )
         access_key, _ = await issue_new_access_key(db)
-        session = await _start_session(db, workspace_id, token_sha256, "session.create", meta)
+        session = await _start_session(
+            db, workspace_id, cookie, token_sha256, "session.create", meta
+        )
         for action in ("workspace.create", "consent.accept", "access_key.issue"):
             await repository.add_audit(
                 db,
@@ -112,7 +122,7 @@ async def _create(
         await repository.complete_workspace_create_key(
             db, key_sha256, WORKSPACE_CREATED_STATUS, _seal(keys, body, workspace_id, key_sha256)
         )
-    return CreatedWorkspace(body, _issued(workspace_id, session, cookie), replayed=False)
+    return CreatedWorkspace(body, session, replayed=False)
 
 
 async def _replay_creation(
@@ -133,9 +143,11 @@ async def _replay_creation(
     cookie, token_sha256 = new_session_token()
     async with workspace_tx(db, workspace_id, request_id=meta.request_id):
         keys = await load_workspace_keys(db, kek, workspace_id)
-        session = await _start_session(db, workspace_id, token_sha256, "session.create", meta)
+        session = await _start_session(
+            db, workspace_id, cookie, token_sha256, "session.create", meta
+        )
     body = json.loads(keys.decrypt_field(claim.response_body_ct, _aad(workspace_id, key_sha256)))
-    return CreatedWorkspace(body, _issued(workspace_id, session, cookie), replayed=True)
+    return CreatedWorkspace(body, session, replayed=True)
 
 
 async def issue_new_access_key(db: AsyncSession) -> tuple[AccessKey, bool]:
@@ -186,19 +198,19 @@ async def open_by_access_key(db: AsyncSession, typed_key: str, meta: RequestMeta
         raise ProblemError(ErrorCode.ACCESS_KEY_INVALID)
     cookie, token_sha256 = new_session_token()
     async with workspace_tx(db, found.workspace_id, request_id=meta.request_id):
-        session = await _start_session(
-            db, found.workspace_id, token_sha256, "session.restore", meta
+        return await _start_session(
+            db, found.workspace_id, cookie, token_sha256, "session.restore", meta
         )
-    return _issued(found.workspace_id, session, cookie)
 
 
-async def refresh_session(db: AsyncSession, session: SessionContext) -> datetime:
+async def refresh_session(db: AsyncSession, session: SessionContext) -> SessionState:
     """Extend the idle timeout of the current session; 401 if it expired meanwhile."""
     async with session_tx(db, session):
         idle_expires_at = await repository.touch_session(db, session.session_id)
+        timezone = await repository.workspace_timezone(db, session.workspace_id)
     if idle_expires_at is None:
         raise ProblemError(ErrorCode.UNAUTHENTICATED)
-    return idle_expires_at
+    return SessionState(idle_expires_at, timezone or DEFAULT_TIMEZONE)
 
 
 async def end_session(
@@ -217,8 +229,13 @@ async def end_session(
 
 
 async def _start_session(
-    db: AsyncSession, workspace_id: UUID, token_sha256: bytes, action: str, meta: RequestMeta
-) -> repository.NewSession:
+    db: AsyncSession,
+    workspace_id: UUID,
+    cookie: str,
+    token_sha256: bytes,
+    action: str,
+    meta: RequestMeta,
+) -> IssuedSession:
     session = await repository.create_session(db, token_sha256)
     if session is None:
         raise ProblemError(ErrorCode.UNAUTHENTICATED)
@@ -230,11 +247,14 @@ async def _start_session(
         request_id=meta.request_id,
         ip_prefix=meta.ip_prefix,
     )
-    return session
-
-
-def _issued(workspace_id: UUID, session: repository.NewSession, cookie: str) -> IssuedSession:
-    return IssuedSession(workspace_id, session.session_id, cookie, session.idle_expires_at)
+    timezone = await repository.workspace_timezone(db, workspace_id)
+    return IssuedSession(
+        workspace_id,
+        session.session_id,
+        cookie,
+        session.idle_expires_at,
+        timezone or DEFAULT_TIMEZONE,
+    )
 
 
 def _aad(workspace_id: UUID, key_sha256: bytes) -> bytes:

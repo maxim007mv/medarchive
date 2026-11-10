@@ -63,6 +63,7 @@ class SessionOut(BaseModel):
     csrf_token: str
     scopes: list[Scope]
     idle_expires_at: datetime | None = None
+    timezone: str | None = None
 
 
 @cache

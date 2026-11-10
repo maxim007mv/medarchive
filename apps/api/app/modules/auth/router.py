@@ -71,14 +71,15 @@ async def create_workspace(
 async def get_current_session(
     request: Request, response: Response, db: Db, session: ReadSession
 ) -> SessionOut:
-    idle_expires_at = await service.refresh_session(db, session)
+    state = await service.refresh_session(db, session)
     cookie = request.cookies[SESSION_COOKIE]
-    set_session_cookie(response, cookie, idle_expires_at)
+    set_session_cookie(response, cookie, state.idle_expires_at)
     return SessionOut(
         workspace_id=session.workspace_id,
         csrf_token=csrf_token(_csrf_secret(request), session.session_id),
         scopes=_SCOPES,
-        idle_expires_at=idle_expires_at,
+        idle_expires_at=state.idle_expires_at,
+        timezone=state.timezone,
     )
 
 
@@ -101,6 +102,7 @@ async def open_session(
         csrf_token=_csrf(request, issued),
         scopes=_SCOPES,
         idle_expires_at=issued.idle_expires_at,
+        timezone=issued.timezone,
     )
 
 

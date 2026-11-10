@@ -147,6 +147,30 @@ async def test_session_returns_csrf_and_scopes(api: Api) -> None:
     assert response.headers["cache-control"] == "no-store"
 
 
+async def test_archive_keeps_the_chosen_timezone(api: Api) -> None:
+    async with api.client() as owner, api.client() as other_device:
+        response = await owner.post(
+            "/api/v1/workspaces",
+            json={**CONSENT, "timezone": "Asia/Yekaterinburg"},
+            headers={"Idempotency-Key": secrets.token_hex(16)},
+        )
+        session = await owner.get("/api/v1/session")
+        restored = await other_device.post(
+            "/api/v1/sessions", json={"access_key": response.json()["access_key"]}
+        )
+
+    assert session.json()["timezone"] == "Asia/Yekaterinburg"
+    assert restored.json()["timezone"] == "Asia/Yekaterinburg"
+
+
+async def test_archive_without_timezone_uses_moscow(api: Api) -> None:
+    async with api.client() as client:
+        await create_archive(client)
+        session = await client.get("/api/v1/session")
+
+    assert session.json()["timezone"] == "Europe/Moscow"
+
+
 @pytest.mark.parametrize("cookie", [None, "garbage", "A" * 43])
 async def test_session_without_valid_cookie_is_unauthenticated(
     api: Api, cookie: str | None

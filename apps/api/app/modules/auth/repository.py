@@ -10,9 +10,11 @@ from datetime import datetime, timedelta
 from ipaddress import IPv4Network, IPv6Network
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models import Workspace
 
 _UNIQUE_VIOLATION = "23505"
 SESSION_IDLE_TTL = timedelta(days=30)
@@ -92,20 +94,33 @@ async def create_workspace(
     kek_key_id: str,
     policy_version: str,
     evidence_sha256: bytes,
+    timezone: str,
 ) -> datetime:
     """Inside workspace_tx of the new id: workspace row and accepted consent; returns created_at."""
     created_at: datetime = (
         await db.execute(
-            text("SELECT app.create_workspace(:dek, :kek_key_id, :policy_version, :evidence)"),
+            text(
+                "SELECT app.create_workspace("
+                ":dek, :kek_key_id, :policy_version, :evidence, :timezone)"
+            ),
             {
                 "dek": dek_ciphertext,
                 "kek_key_id": kek_key_id,
                 "policy_version": policy_version,
                 "evidence": evidence_sha256,
+                "timezone": timezone,
             },
         )
     ).scalar_one()
     return created_at
+
+
+async def workspace_timezone(db: AsyncSession, workspace_id: UUID) -> str | None:
+    """Inside workspace_tx; None for archives created before the zone was stored."""
+    timezone: str | None = await db.scalar(
+        select(Workspace.timezone).where(Workspace.id == workspace_id)
+    )
+    return timezone
 
 
 async def create_session(db: AsyncSession, token_sha256: bytes) -> NewSession | None:
