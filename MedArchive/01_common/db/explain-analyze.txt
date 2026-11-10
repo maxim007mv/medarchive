@@ -1,0 +1,154 @@
+-- Вывод EXPLAIN (ANALYZE, BUFFERS), PostgreSQL 18.6, 10.11.2026. Данные: 2001 пространство, 210 000 документов, 3% удалены.
+-- Стенд: локальный инстанс, shared_buffers по умолчанию (128 МБ), данные прогреты одним прогоном.
+SET
+SET
+=== Q1 Список, первая страница (пространство на 10 000 документов)
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..75.99 rows=51 width=110) (actual time=0.037..0.067 rows=51.00 loops=1)
+   Buffers: shared hit=6
+   ->  Result  (cost=0.42..14017.51 rows=9460 width=110) (actual time=0.036..0.061 rows=51.00 loops=1)
+         One-Time Filter: ((NULLIF(current_setting('app.workspace_id'::text, true), ''::text))::uuid = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+         Buffers: shared hit=6
+         ->  Index Scan using documents_list on documents  (cost=0.42..14017.51 rows=9460 width=190) (actual time=0.028..0.043 rows=51.00 loops=1)
+               Index Cond: (workspace_id = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+               Index Searches: 1
+               Buffers: shared hit=6
+ Planning:
+   Buffers: shared hit=301
+ Planning Time: 1.011 ms
+ Execution Time: 0.117 ms
+
+=== Q2 Следующая страница по курсору (keyset, без OFFSET)
+                                                                                                                        QUERY PLAN                                                                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..76.43 rows=51 width=109) (actual time=0.024..0.060 rows=51.00 loops=1)
+   Buffers: shared hit=8
+   ->  Result  (cost=0.42..13912.21 rows=9334 width=109) (actual time=0.023..0.055 rows=51.00 loops=1)
+         One-Time Filter: ((NULLIF(current_setting('app.workspace_id'::text, true), ''::text))::uuid = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+         Buffers: shared hit=8
+         ->  Index Scan using documents_list on documents  (cost=0.42..13912.21 rows=9334 width=109) (actual time=0.019..0.041 rows=51.00 loops=1)
+               Index Cond: ((workspace_id = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid) AND (ROW(list_key, uploaded_at, id) > ROW('-45807'::integer, '2025-06-01 10:00:00+03'::timestamp with time zone, '00000000-0000-0000-0000-000000000000'::uuid)))
+               Index Searches: 1
+               Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.110 ms
+ Execution Time: 0.088 ms
+
+=== Q3 Период по дате документа + matched и undated_excluded одним запросом
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=671.81..671.82 rows=1 width=16) (actual time=2.375..2.376 rows=1.00 loops=1)
+   Buffers: shared hit=33 read=148
+   ->  Result  (cost=0.42..664.04 rows=777 width=4) (actual time=0.702..2.304 rows=1461.00 loops=1)
+         One-Time Filter: ((NULLIF(current_setting('app.workspace_id'::text, true), ''::text))::uuid = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+         Buffers: shared hit=33 read=148
+         ->  Index Only Scan using documents_list on documents  (cost=0.42..664.04 rows=777 width=4) (actual time=0.700..2.197 rows=1461.00 loops=1)
+               Index Cond: (workspace_id = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+               Filter: (((list_key >= '-45775'::integer) AND (list_key <= '-45746'::integer)) OR (list_key = 2147483647))
+               Rows Removed by Filter: 8266
+               Heap Fetches: 0
+               Index Searches: 1
+               Buffers: shared hit=33 read=148
+ Planning:
+   Buffers: shared hit=10
+ Planning Time: 0.112 ms
+ Execution Time: 2.398 ms
+
+=== Q4 Поиск «анализ» через слепой индекс триграмм (GIN)
+                                                                                               QUERY PLAN                                                                                                
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=10680.29..10680.30 rows=1 width=93) (actual time=5.762..5.769 rows=51.00 loops=1)
+   Buffers: shared hit=492 read=4
+   ->  Sort  (cost=10680.29..10680.30 rows=1 width=93) (actual time=5.761..5.764 rows=51.00 loops=1)
+         Sort Key: list_key, uploaded_at, id
+         Sort Method: top-N heapsort  Memory: 38kB
+         Buffers: shared hit=492 read=4
+         ->  Result  (cost=81.04..10680.28 rows=1 width=93) (actual time=0.676..5.502 rows=1460.00 loops=1)
+               One-Time Filter: ((NULLIF(current_setting('app.workspace_id'::text, true), ''::text))::uuid = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+               Buffers: shared hit=483 read=4
+               ->  Bitmap Heap Scan on documents  (cost=81.04..10680.28 rows=1 width=93) (actual time=0.672..5.321 rows=1460.00 loops=1)
+                     Recheck Cond: ((workspace_id = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid) AND (deleted_at IS NULL))
+                     Filter: (title_bidx @> '{-8425595970062312051,-2339064653628628107,1212668895800741549,1962914994022631601,2456375386582506399,6182701532411684708,7347711748363165975}'::bigint[])
+                     Rows Removed by Filter: 8267
+                     Heap Blocks: exact=474
+                     Buffers: shared hit=483 read=4
+                     ->  Bitmap Index Scan on documents_title_bidx  (cost=0.00..81.03 rows=9745 width=0) (actual time=0.608..0.609 rows=9727.00 loops=1)
+                           Index Cond: (workspace_id = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+                           Index Searches: 1
+                           Buffers: shared hit=3 read=4
+ Planning:
+   Buffers: shared hit=54
+ Planning Time: 0.188 ms
+ Execution Time: 5.839 ms
+
+=== Q5 Период по дате загрузки в часовом поясе Europe/Moscow
+                                                                                                                QUERY PLAN                                                                                                                
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..32.72 rows=12 width=28) (actual time=0.024..0.060 rows=51.00 loops=1)
+   Buffers: shared hit=54
+   ->  Result  (cost=0.42..32.72 rows=12 width=28) (actual time=0.023..0.056 rows=51.00 loops=1)
+         One-Time Filter: ((NULLIF(current_setting('app.workspace_id'::text, true), ''::text))::uuid = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+         Buffers: shared hit=54
+         ->  Index Scan using documents_by_upload on documents  (cost=0.42..32.72 rows=12 width=28) (actual time=0.019..0.040 rows=51.00 loops=1)
+               Index Cond: ((workspace_id = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid) AND (uploaded_at >= '2025-04-01 00:00:00+03'::timestamp with time zone) AND (uploaded_at < '2025-05-01 00:00:00+03'::timestamp with time zone))
+               Index Searches: 1
+               Buffers: shared hit=54
+ Planning:
+   Buffers: shared hit=4
+ Planning Time: 0.121 ms
+ Execution Time: 0.072 ms
+
+=== Q6 Только документы без даты
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..3.93 rows=51 width=28) (actual time=0.012..0.023 rows=51.00 loops=1)
+   Buffers: shared hit=4
+   ->  Result  (cost=0.42..51.84 rows=748 width=28) (actual time=0.011..0.019 rows=51.00 loops=1)
+         One-Time Filter: ((NULLIF(current_setting('app.workspace_id'::text, true), ''::text))::uuid = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid)
+         Buffers: shared hit=4
+         ->  Index Only Scan using documents_list on documents  (cost=0.42..51.84 rows=748 width=28) (actual time=0.010..0.014 rows=51.00 loops=1)
+               Index Cond: ((workspace_id = '002606fe-2bdf-4b58-b55b-b9821e999b53'::uuid) AND (list_key = 2147483647))
+               Heap Fetches: 0
+               Index Searches: 1
+               Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.058 ms
+ Execution Time: 0.033 ms
+
+=== Q7 Обычное пространство (100 документов), первая страница
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..113.16 rows=51 width=109) (actual time=0.010..0.047 rows=51.00 loops=1)
+   Buffers: shared hit=7
+   ->  Result  (cost=0.42..208.21 rows=94 width=109) (actual time=0.009..0.042 rows=51.00 loops=1)
+         One-Time Filter: ((NULLIF(current_setting('app.workspace_id'::text, true), ''::text))::uuid = '00aa0cd3-8275-408c-998f-981873c54c63'::uuid)
+         Buffers: shared hit=7
+         ->  Index Scan using documents_list on documents  (cost=0.42..208.21 rows=94 width=109) (actual time=0.007..0.028 rows=51.00 loops=1)
+               Index Cond: (workspace_id = '00aa0cd3-8275-408c-998f-981873c54c63'::uuid)
+               Index Searches: 1
+               Buffers: shared hit=7
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.107 ms
+ Execution Time: 0.059 ms
+
+=== Q8 Изоляция: запрос к чужому пространству при контексте NORMAL
+ visible_foreign 
+-----------------
+               0
+
+=== Q9 Изоляция: без app.workspace_id не видно ничего
+ visible_without_context 
+-------------------------
+                       0
+
+=== Q10 Удалённые не видны даже по прямому условию
+ visible_deleted 
+-----------------
+               0
+
+=== Q11 Попытка вставить документ в чужое пространство
+psql:explain.sql:56: ERROR:  new row violates row-level security policy for table "documents"
