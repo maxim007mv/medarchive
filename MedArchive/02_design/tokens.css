@@ -70,6 +70,9 @@
   --type-mono-size: 13px;
   --type-mono-line: 20px;
   --type-mono-weight: 400;
+  --type-buttonLg-size: 15px;
+  --type-buttonLg-line: 20px;
+  --type-buttonLg-weight: 500;
   --space-0: 0px;
   --space-0-5: 2px;
   --space-1: 4px;
@@ -95,6 +98,11 @@
   --control-heightLg: 48px;
   --control-iconButton: 40px;
   --control-iconButtonSm: 32px;
+  --component-dialogWidthForm: 560px;
+  --component-dialogWidthConfirm: 440px;
+  --component-fieldFocusRing: 0 0 0 3px color-mix(in srgb, var(--c-accent) 22%, transparent);
+  --component-fieldErrorBorder: 2px;
+  --component-segmentIndicator: inset 0 -2px 0 var(--c-accent);
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;
