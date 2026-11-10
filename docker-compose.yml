@@ -39,7 +39,8 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run make secrets}
       # MinIO has no per-bucket CORS (PutBucketCors is not implemented), so the allowed origin
       # is server-wide. Only ma-quarantine is meant for the browser (presigned POST).
-      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:${WEB_PORT:-3000}
+      # The second origin is the https entry of the `tls` profile (ADR-048 fallback for E2E).
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:${WEB_PORT:-3000},https://localhost:${TLS_WEB_PORT:-3443}
     volumes:
       - minio_data:/data
     # 9000 is published because the browser uploads with presigned POST straight to storage.
@@ -86,7 +87,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://ma_app:${MA_APP_PASSWORD}@db:5432/medarchive
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: http://localhost:${MINIO_PORT:-9000}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_PORT:-9000}}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_QUARANTINE: ma-quarantine
@@ -140,11 +141,30 @@ services:
     image: medarchive/web:${IMAGE_TAG:-local}
     environment:
       # CSP connect-src: the browser uploads to storage with presigned POST (apps/web/middleware.ts).
-      S3_PUBLIC_ENDPOINT: http://localhost:${MINIO_PORT:-9000}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_PORT:-9000}}
     tmpfs: [/tmp, /app/apps/web/.next/cache]
     ports: ["127.0.0.1:${WEB_PORT:-3000}:3000"]
     depends_on:
       api: { condition: service_healthy }
+
+  # ADR-048 fallback, E2E only (`--profile tls`): https in front of web and storage, because
+  # WebKit drops the Secure session cookie on http. Run with S3_PUBLIC_ENDPOINT=https://localhost:9443.
+  tls:
+    <<: *hardening
+    image: caddy:2.11.9-alpine
+    profiles: [tls]
+    user: "65534:65534"
+    tmpfs: ["/tmp", "/data:mode=1777", "/config:mode=1777"]
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    ports: ["127.0.0.1:${TLS_WEB_PORT:-3443}:3443", "127.0.0.1:${TLS_STORAGE_PORT:-9443}:9443"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--no-check-certificate", "-O", "/dev/null", "https://localhost:3443/"]
+      interval: 5s
+      retries: 20
+    depends_on:
+      web: { condition: service_healthy }
+      minio: { condition: service_healthy }
 
 secrets:
   kek_keyset:
