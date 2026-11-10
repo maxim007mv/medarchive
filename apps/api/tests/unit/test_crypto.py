@@ -5,11 +5,16 @@ from uuid import UUID, uuid4
 
 import pytest
 import tink
+from prometheus_client import REGISTRY
 from tink import aead, json_proto_keyset_format, secret_key_access
 
 from app.core.crypto import Kek, WorkspaceKeys
 
 SEGMENT_BYTES = 4096
+
+
+def _kek_errors(operation: str) -> float:
+    return REGISTRY.get_sample_value("kek_errors_total", {"operation": operation}) or 0.0
 
 
 def _write_kek(path: Path) -> Path:
@@ -79,9 +84,19 @@ def test_wrapped_keys_do_not_open_with_another_kek(
 ) -> None:
     _, wrapped = kek.new_workspace_keys(workspace_id)
     other = Kek.from_file(_write_kek(tmp_path / "other.json"))
+    before = _kek_errors("open_workspace_keys")
 
     with pytest.raises(tink.TinkError):
         other.open_workspace_keys(wrapped, workspace_id)
+    assert _kek_errors("open_workspace_keys") == before + 1
+
+
+def test_unreadable_kek_file_is_counted(tmp_path: Path) -> None:
+    before = _kek_errors("load_kek")
+
+    with pytest.raises(OSError):
+        Kek.from_file(tmp_path / "missing.json")
+    assert _kek_errors("load_kek") == before + 1
 
 
 def test_workspaces_get_independent_keys(kek: Kek) -> None:

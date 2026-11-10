@@ -17,6 +17,11 @@ UPLOAD_BYTES = Histogram(
     buckets=(10_000, 100_000, 500_000, 1_000_000, 5_000_000, 10_000_000, 20_971_520),
 )
 S3_ERRORS = Counter("s3_errors_total", "Object storage errors by operation", ["operation"])
+KEK_ERRORS = Counter(
+    "kek_errors_total",
+    "Failures to read the KEK file or to open a workspace key bundle",
+    ["operation"],
+)
 
 
 def metrics_response() -> Response:

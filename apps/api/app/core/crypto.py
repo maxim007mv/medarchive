@@ -22,6 +22,7 @@ from tink import (
 )
 
 from app.core import blind_index
+from app.core.metrics import KEK_ERRORS
 
 aead.register()
 streaming_aead.register()
@@ -86,7 +87,11 @@ class Kek:
 
     @classmethod
     def from_file(cls, path: Path) -> "Kek":
-        handle = json_proto_keyset_format.parse(path.read_text(), secret_key_access.TOKEN)
+        try:
+            handle = json_proto_keyset_format.parse(path.read_text(), secret_key_access.TOKEN)
+        except (OSError, tink.TinkError):
+            KEK_ERRORS.labels("load_kek").inc()
+            raise
         return cls(handle)
 
     def new_workspace_keys(self, workspace_id: UUID) -> tuple[WorkspaceKeys, bytes]:
@@ -102,8 +107,12 @@ class Kek:
 
     def open_workspace_keys(self, wrapped: bytes, workspace_id: UUID) -> WorkspaceKeys:
         """Raises `tink.TinkError` for a bundle of another workspace or another KEK."""
-        bundle: bytes = self._aead.decrypt(wrapped, workspace_id.bytes)
-        fields, files, blind_index_key = _unpack(bundle)
+        try:
+            bundle: bytes = self._aead.decrypt(wrapped, workspace_id.bytes)
+            fields, files, blind_index_key = _unpack(bundle)
+        except tink.TinkError:
+            KEK_ERRORS.labels("open_workspace_keys").inc()
+            raise
         return _open(
             proto_keyset_format.parse(fields, secret_key_access.TOKEN),
             proto_keyset_format.parse(files, secret_key_access.TOKEN),
