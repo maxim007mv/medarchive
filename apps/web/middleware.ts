@@ -10,7 +10,9 @@ export function contentSecurityPolicy(nonce: string): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'${isDev ? " 'unsafe-eval'" : ""}`,
-    `style-src 'self'${isDev ? " 'unsafe-inline'" : ""}`,
+    // A nonce makes browsers ignore 'unsafe-inline', so dev, which injects unnonced <style>, gets
+    // only the latter. In production Next puts the nonce on its own inline styles.
+    `style-src 'self' ${isDev ? "'unsafe-inline'" : `'nonce-${nonce}'`}`,
     `connect-src 'self' ${storageOrigin}`,
     // The PDF viewer is an iframe on /api/v1/documents/{id}/content (FE-16).
     "frame-src 'self'",
