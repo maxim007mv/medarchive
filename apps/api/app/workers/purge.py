@@ -176,8 +176,11 @@ class Purger:
             (self._storage.docs, f"ws/{workspace_id}/"),
             (self._storage.quarantine, f"q/{workspace_id}/"),
         ):
-            keys = await asyncio.to_thread(_list_keys, bucket, prefix)
-            await self._delete_objects(bucket, keys, "workspace_deleted", report)
+            # The row may go even if listing fails: its keys are already erased, ma-docs leftovers
+            # are orphans for the next pass and quarantine ones expire by the lifecycle rule.
+            with _storage_failure_logged("workspace_objects", report):
+                keys = await asyncio.to_thread(_list_keys, bucket, prefix)
+                await self._delete_objects(bucket, keys, "workspace_deleted", report)
         async with self._sessions() as db, workspace_tx(db, workspace_id):
             await db.execute(delete(Workspace).where(Workspace.id == workspace_id))
         report.workspaces += 1

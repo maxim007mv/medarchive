@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.db.transaction import workspace_tx
-from app.storage.s3 import ObjectStorage
+from app.storage.s3 import ObjectStorage, StorageUnavailableError
 from app.workers.purge import Purger, PurgeReport
 
 pytestmark = pytest.mark.usefixtures("storage")
@@ -183,3 +183,32 @@ async def test_purge_keeps_audit_partitions_ahead(
         " AND to_date(substr(c.relname, 11), 'YYYY_MM') >= date_trunc('month', now())"
     )
     assert await _scalar(superuser_engine, partitions) == 3
+
+
+async def test_workspace_row_goes_even_if_storage_cannot_list(
+    app_sessions: async_sessionmaker[AsyncSession],
+    superuser_engine: AsyncEngine,
+    purger: Purger,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_id = await _create_workspace(app_sessions)
+    async with app_sessions() as db, workspace_tx(db, workspace_id):
+        await db.execute(text("SELECT app.delete_workspace()"))
+    async with superuser_engine.begin() as connection:
+        await connection.execute(
+            text(
+                "UPDATE app.workspaces SET purge_after = now() - interval '1 hour' WHERE id = :ws"
+            ),
+            {"ws": workspace_id},
+        )
+
+    def unavailable(bucket: object, prefix: str) -> list[str]:
+        raise StorageUnavailableError
+
+    monkeypatch.setattr("app.workers.purge._list_keys", unavailable)
+
+    report = await purger.run_once()
+
+    assert report.storage_failures >= 2
+    exists = "SELECT count(*) FROM app.workspaces WHERE id = :ws"
+    assert await _scalar(superuser_engine, exists, ws=workspace_id) == 0
