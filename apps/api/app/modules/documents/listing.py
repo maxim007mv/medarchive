@@ -118,4 +118,3 @@ class Position:
         if uploaded_at.tzinfo is None:
             raise ProblemError(ErrorCode.INVALID_PAGE_TOKEN)
         return position
-
