@@ -160,9 +160,14 @@ class Gate:
         )
 
 
+# Inherited values would change what is tested: API settings leak into pytest and compose, and
+# `uv run` sets VIRTUAL_ENV for this script only.
+NOT_INHERITED = {"VIRTUAL_ENV", "RATE_LIMITS_ENABLED", "TRUSTED_PROXIES", "NET_PREFIX"}
+
+
 def child_env() -> dict[str, str]:
-    """The stack ports for every child; without this script's own venv, which `uv run` sets."""
-    inherited = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    """The environment of every check: the caller's, minus stack settings, plus STACK_ENV."""
+    inherited = {k: v for k, v in os.environ.items() if k not in NOT_INHERITED}
     return {**inherited, **STACK_ENV}
 
 
