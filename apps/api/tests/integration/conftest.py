@@ -8,11 +8,14 @@ import os
 import secrets
 import subprocess
 import sys
+import time
 from collections.abc import AsyncIterator, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 import boto3
+import httpx
 import pytest
 from api_stack import Api, redis_container, running_api, settings_for, write_kek
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -28,7 +31,7 @@ MINIO_IMAGE = "pgsty/minio:RELEASE.2026-08-04T00-00-00Z"
 POSTGRES_IMAGE = "postgres:17-alpine"
 QUARANTINE_BUCKET, DOCS_BUCKET = "ma-quarantine", "ma-docs"
 ROLES = ("ma_owner", "ma_app", "ma_worker")
-STARTUP_ATTEMPTS = 3
+STARTUP_TIMEOUT_S = 60
 
 
 @dataclass(frozen=True)
@@ -40,22 +43,41 @@ class DatabaseUrls:
     worker: str
 
 
-def _start_minio() -> MinioContainer:
+@contextmanager
+def _running_minio() -> Iterator[MinioContainer]:
     """Docker Desktop may report the container running before its port is published, and the
-    wait strategy then fails at once with ConnectionError; a fresh container gets it right."""
-    for _ in range(STARTUP_ATTEMPTS - 1):
-        container = MinioContainer(image=MINIO_IMAGE)
+    wait strategy then fails at once with ConnectionError: wait for the port and health here.
+    The container is removed on every exit, ready or not."""
+    container = MinioContainer(image=MINIO_IMAGE)
+    try:
         try:
-            return container.start()
+            container.start()
         except ConnectionError:
-            container.stop()
-    return MinioContainer(image=MINIO_IMAGE).start()
+            _wait_until_live(container)
+        yield container
+    finally:
+        container.stop()
+
+
+def _wait_until_live(container: MinioContainer) -> None:
+    deadline = time.monotonic() + STARTUP_TIMEOUT_S
+    while True:
+        try:
+            port = container.get_exposed_port(container.port)
+            url = f"http://{container.get_container_host_ip()}:{port}/minio/health/live"
+            if httpx.get(url, timeout=2).status_code == 200:
+                return
+        except (ConnectionError, httpx.HTTPError):
+            pass  # not published or not listening yet; retried until the deadline
+        if time.monotonic() > deadline:
+            raise TimeoutError("MinIO test container did not become ready")
+        time.sleep(0.5)
 
 
 @pytest.fixture(scope="session")
 def storage() -> Iterator[ObjectStorage]:
     """Both buckets in a throwaway MinIO; the API credentials are the root user here."""
-    with _start_minio() as minio:
+    with _running_minio() as minio:
         config = minio.get_config()
         endpoint = f"http://{config['endpoint']}"
         admin = boto3.client(
