@@ -31,7 +31,11 @@ test("FE-07: a toast is announced through a polite live region", async () => {
 
   await userEvent.click(screen.getByRole("button", { name: texts["upload.save"] }));
 
-  const announcement = await screen.findByText(added, { selector: '[aria-live="polite"]' });
+  const announcement = await screen.findByText(
+    (_, element) =>
+      element?.getAttribute("aria-live") === "polite" &&
+      (element.textContent ?? "").includes(added),
+  );
   expect(announcement).toHaveAttribute("role", "status");
   expect(document.querySelector('[aria-live="assertive"]')).toBeNull();
 });

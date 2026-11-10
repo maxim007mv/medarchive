@@ -3,6 +3,8 @@
 import * as RadixToast from "@radix-ui/react-toast";
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 
+import { texts } from "@/lib/texts";
+
 export type ToastOptions = {
   title: string;
   action?: { label: string; onClick: () => void };
@@ -29,7 +31,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const dismiss = (id: number) => setToasts((shown) => shown.filter((toast) => toast.id !== id));
 
   return (
-    <RadixToast.Provider duration={DEFAULT_DURATION_MS} swipeDirection="down" label="">
+    // Radix needs a non-empty label for the region and the announcement prefix, and its defaults
+    // are English. The dictionary has no toast-region text yet, so the product name is used.
+    <RadixToast.Provider
+      duration={DEFAULT_DURATION_MS}
+      swipeDirection="down"
+      label={texts["app.name"]}
+    >
       <ShowToastContext value={show}>{children}</ShowToastContext>
       {toasts.map((toast) => (
         <RadixToast.Root
@@ -52,7 +60,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           )}
         </RadixToast.Root>
       ))}
-      <RadixToast.Viewport className="pb-safe fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 px-4 outline-hidden md:pb-8" />
+      <RadixToast.Viewport
+        label={texts["app.name"]}
+        className="pb-safe fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 px-4 outline-hidden md:pb-8"
+      />
     </RadixToast.Provider>
   );
 }
