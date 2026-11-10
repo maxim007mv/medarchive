@@ -1,6 +1,6 @@
 # Бэкенд: ядро, архив, сессии, ключ доступа (BE-01, BE-03, BE-04, BE-05, BE-12, BE-14, BE-15)
 
-Статус: готово, код закоммичен. Интеграционные тесты ядра (`tests/integration/api_stack.py`, `test_auth.py`, `test_workspace.py`, `test_errors_api.py`, `test_security_headers.py`, `test_ratelimit_api.py`) коммитятся после коммита фикстуры `database` в `tests/integration/conftest.py` (агент документов); роутеры `uploads`, `documents`, `exports` подключаются в `app/main.py` после их коммита. Агент BACKEND-CORE, 10.11.2026.
+Статус: готово, код и тесты закоммичены; в `app/main.py` подключены все роутеры (`auth`, `workspace`, `uploads`, `documents`, `exports`). Агент BACKEND-CORE, 10.11.2026.
 
 ## Что сделано
 
@@ -65,7 +65,7 @@
 | D-005 | Лимиты по IP считают адрес пользователя за доверенным прокси (`TRUSTED_PROXIES`), подделанные левые адреса `X-Forwarded-For` не учитываются; тест с двумя адресами за одним прокси | `fa14f11` |
 | D-006 | Параметр `RATE_LIMITS_ENABLED` | `fa14f11` |
 | D-007 | Счётчик `kek_errors_total{operation}` | `098533d` |
-| D-008 | Наблюдался на `62fe880`, до коммита фабрики: `82e87c4` подключает `auth`, `workspace`, `/readyz`, `/metrics`; роутеры `uploads`, `documents`, `exports` подключу после коммита агента документов | `82e87c4` |
+| D-008 | Наблюдался на `62fe880`, до коммита фабрики: `82e87c4` подключает `auth`, `workspace`, `/readyz`, `/metrics`, `5d517a4` роутеры `uploads`, `documents`, `exports` | `82e87c4`, `5d517a4` |
 
 ## Запросы к агенту DevOps (compose и секреты)
 
@@ -84,7 +84,8 @@
 | `uv run ruff format` и `uv run ruff check` по файлам ядра, auth, workspace и тестам | All checks passed |
 | `uv run mypy app/core app/main.py app/modules/auth app/modules/workspace tests/unit/... tests/integration/...` (strict) | no issues in 43 source files |
 | `uv run pytest tests/unit tests/test_health.py` (вместе с unit-тестами агента документов) | 226 passed |
-| `CONTRACT_BLOCK=3 uv run pytest tests/contract/test_openapi_diff.py` | 19 passed: операции, пути, методы и статусы ядра совпадают с `openapi.yaml` |
+| `CONTRACT_BLOCK=3 uv run pytest tests/contract/test_openapi_diff.py` | 19 passed: операции, пути, методы и статусы ядра совпадают с `openapi.yaml`; с роутерами агента документов `CONTRACT_BLOCK=6`: 39 passed |
+| `uv run pytest tests/unit tests/test_health.py tests/integration tests/contract` (все агенты API вместе, рабочее дерево) | 405 passed |
 | `TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock uv run pytest tests/integration/test_auth.py tests/integration/test_workspace.py tests/integration/test_errors_api.py tests/integration/test_security_headers.py tests/integration/test_ratelimit_api.py` (PostgreSQL 17 с миграциями 0001+0002, MinIO, Redis 7) | 55 passed; общий прогон unit + integration ядра 281 passed |
 
 | Schemathesis 4.33.1 против живого API (uvicorn на 127.0.0.1:8811, PostgreSQL 17 + MinIO + Redis в Docker на свободных портах), `CONTRACT_BASE_URL=... SCHEMATHESIS_HOOKS=tests.contract.hooks uv run schemathesis run ../../openapi.yaml --url http://127.0.0.1:8811 --checks all --max-examples 10 --seed 20261110 --workers 1 --include-operation-id ...` | Операции `workspaces.create`, `session.get`, `sessions.create`, `workspace.get`, `workspace.rotateKey`, `documentTypes.list`, `health.live`, `health.ready`: 221 из 221 прошли. `sessions.delete` и `workspace.delete` отдельным прогоном: 35 случаев, 2 ожидаемых замечания (ниже) |
@@ -94,5 +95,7 @@
 Для агента QA (`tests/contract/hooks.py`): хук создаёт архив на каждое обновление авторизации, а лимит `POST /api/v1/workspaces` 10 в час на IP; при полном прогоне с одного адреса авторизация падает с 429 после десятого архива. Варианты: очищать Redis стенда перед прогоном, гонять `sessions.delete` и `workspace.delete` отдельно (они отзывают сессию) или подставлять `If-Match` из `GET /api/v1/workspace`.
 
 Покрытие тест-кейсов: TC-002 (атрибуты cookie), TC-003, TC-082 (5×401 с одинаковым телом, затем 429 с `Retry-After`), TC-083, TC-084, TC-093, TC-094 (маршруты ядра), T6 (`test_t6_ciphertext_moved_to_another_document_fails`), поиск «анали»/«АНАЛИЗ»/ё-е, курсор с чужим фильтром и подделкой, GCRA, разбор ключа Crockford, атомарность лимита под 20 параллельными запросами, `/readyz` 503 при недоступных БД, хранилище и KEK. `scope_insufficient` проверен unit-тестом `require_scope`: у сессии владельца все скоупы, другой сессии в v1 нет.
+
+Фикстуры `redis_url` и `api` в моих тестовых файлах объявлены локально, потому что `conftest.py` с общими фикстурами агента документов ещё не закоммичен; после его коммита локальные копии можно удалить (локальная фикстура модуля перекрывает фикстуру `conftest.py`, поэтому конфликта нет).
 
 Testcontainers на Docker Desktop: нужен `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`; при параллельных прогонах нескольких агентов Ryuk конфликтует по имени, помогает `TESTCONTAINERS_RYUK_DISABLED=true` (фикстуры останавливают контейнеры сами).
