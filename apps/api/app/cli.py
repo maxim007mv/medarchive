@@ -36,7 +36,6 @@ from app.modules.uploads import service as uploads
 from app.modules.uploads.schemas import PDF_CONTENT_TYPE, UploadCreate
 from app.storage.s3 import ObjectStorage
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
 MANIFEST = Path("qa/fixtures/manifest.json")
 REQUEST_ID = "cli-seed"
 
@@ -185,12 +184,13 @@ def main() -> None:
     seed_parser.add_argument(
         "--root",
         type=Path,
-        default=REPO_ROOT,
-        help="directory with qa/fixtures/manifest.json and the PDFs it lists",
+        help="directory with qa/fixtures/manifest.json and the PDFs it lists"
+        " (default: the checkout of apps/api; the image has no repository, make seed mounts one)",
     )
     args = parser.parse_args()
+    root = args.root or Path(__file__).resolve().parents[3]
     try:
-        asyncio.run(seed(workspace_id=args.workspace, root=args.root))
+        asyncio.run(seed(workspace_id=args.workspace, root=root))
     except SeedError as exc:
         parser.exit(1, f"seed failed: {exc}\n")
 
