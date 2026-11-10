@@ -16,16 +16,11 @@ import { formatDate, formatDateTime, parseDate } from "@/lib/format";
 import { errorTitles, t, texts } from "@/lib/texts";
 
 import { typeLabel } from "./list-texts";
+import { todayIso } from "./today";
 
 export const TITLE_MAX_CHARS = 200;
 /** The counter appears near the limit (11-design-rationale, «Ввести название»). */
 const TITLE_COUNTER_FROM = 180;
-
-/** Today as `YYYY-MM-DD` in the browser's zone: a document cannot be dated later (TC-014). */
-export function todayIso(now = new Date()): string {
-  const [date = ""] = formatDateTime(now, browserTimeZone()).split(", ");
-  return parseDate(date) ?? "";
-}
 
 const schema = z
   .object({

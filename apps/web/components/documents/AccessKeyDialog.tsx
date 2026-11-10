@@ -8,7 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { t, texts } from "@/lib/texts";
 
-import { todayIso } from "./EditForm";
+import { todayIso } from "./today";
 
 function downloadKey(accessKey: string): void {
   const blob = new Blob([t("accessKey.file.body", { key: accessKey })], {

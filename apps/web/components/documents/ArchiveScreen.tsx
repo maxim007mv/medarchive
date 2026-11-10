@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 
@@ -18,21 +19,26 @@ import {
 import { hasAppliedFilters, serializeFilters } from "@/lib/filters";
 import { t, texts } from "@/lib/texts";
 
-import { AccessKeyDialog } from "./AccessKeyDialog";
 import { AppHeader } from "./AppHeader";
 import { AppliedFilters } from "./AppliedFilters";
-import { DeleteDialog, type DeleteTarget } from "./DeleteDialog";
+import type { DeleteTarget } from "./DeleteDialog";
 import { DocumentCards } from "./DocumentCard";
 import { DocumentTable, documentHref } from "./DocumentTable";
 import { EmptyArchive } from "./EmptyArchive";
 import { EmptySearch } from "./EmptySearch";
-import { ExportDialog } from "./ExportDialog";
 import { ListSkeleton } from "./ListSkeleton";
 import { listSubtitle, undatedHint } from "./list-texts";
 import { OfflineBanner, useOfflineReason } from "./OfflineBanner";
 import { Toolbar } from "./Toolbar";
-import { UploadDialog } from "./UploadDialog";
 import { useListFilters } from "./use-list-filters";
+
+// Dialogs load on first use: the form, its validation and the export are not needed to show the list.
+const UploadDialog = dynamic(() => import("./UploadDialog").then((module) => module.UploadDialog));
+const ExportDialog = dynamic(() => import("./ExportDialog").then((module) => module.ExportDialog));
+const DeleteDialog = dynamic(() => import("./DeleteDialog").then((module) => module.DeleteDialog));
+const AccessKeyDialog = dynamic(() =>
+  import("./AccessKeyDialog").then((module) => module.AccessKeyDialog),
+);
 
 /** `--dur-highlight` of tokens.json: how long a new row stays lit. */
 const HIGHLIGHT_MS = 1200;

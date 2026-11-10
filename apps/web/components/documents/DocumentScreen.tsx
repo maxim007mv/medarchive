@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, Download, ExternalLink, Pencil, Trash2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -15,13 +16,15 @@ import { errorTitles, t, texts } from "@/lib/texts";
 
 import { AppHeader } from "./AppHeader";
 import { LIST_URL_KEY } from "./ArchiveScreen";
-import { DeleteDialog } from "./DeleteDialog";
-import { EditPanel } from "./EditPanel";
 import { NotePanel } from "./NotePanel";
 import { OfflineBanner, useOfflineReason } from "./OfflineBanner";
 import { contentUrl, PdfViewer } from "./PdfViewer";
 import { RowMenu } from "./RowMenu";
 import { useProblem } from "./use-problem";
+
+// Loaded on first use: the form with its validation is not needed to read the document.
+const EditPanel = dynamic(() => import("./EditPanel").then((module) => module.EditPanel));
+const DeleteDialog = dynamic(() => import("./DeleteDialog").then((module) => module.DeleteDialog));
 
 /** «Все документы» goes back to the list with the filters it was opened from (FE-16). */
 function useBackHref(): string {
