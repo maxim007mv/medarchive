@@ -99,6 +99,10 @@
   --text-button-lg: 15px;
   --text-button-lg--line-height: var(--type-body-line);
 
+  /* Modal widths: form 560, confirmation 440 (brandbook §9); tokens.json has no size for them. */
+  --container-dialog-form: 560px;
+  --container-dialog-confirm: 440px;
+
   --spacing-control-sm: var(--control-heightSm);
   --spacing-control-md: var(--control-heightMd);
   --spacing-control-lg: var(--control-heightLg);
