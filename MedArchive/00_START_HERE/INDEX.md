@@ -14,10 +14,10 @@
 | `01_common/04-customer-journey.md` | Путь пользователя: все шаги и состояния | 20 КБ |
 | `01_common/05-architecture.md` | Архитектура C4, потоки, AI и обратное давление, NFR | 20 КБ |
 | `01_common/06-api-contract.md` | Контракт API v1: правила, каталог ошибок, примеры | 40 КБ |
-| `01_common/07-data-model.sql` | DDL PostgreSQL | 17 КБ |
-| `01_common/07-database.md` | БД: ERD, индексы, планы, RLS, шифрование, бэкапы | 26 КБ |
+| `01_common/07-data-model.sql` | DDL PostgreSQL | 22 КБ |
+| `01_common/07-database.md` | БД: ERD, индексы, планы, RLS, шифрование, бэкапы | 28 КБ |
 | `01_common/08-security-privacy.md` | Модель угроз STRIDE, ASVS, API Top 10, 152-ФЗ | 13 КБ |
-| `01_common/09-decisions-ADR.md` | 50 архитектурных решений | 57 КБ |
+| `01_common/09-decisions-ADR.md` | 50 архитектурных решений | 59 КБ |
 | `01_common/10-patterns.md` | Каталог паттернов бэкенда и фронтенда | 7 КБ |
 | `01_common/11-design-rationale.md` | Обоснование экранов и действий | 12 КБ |
 | `01_common/12-telegram-summary.md` | Короткая сводка для Telegram | 1 КБ |
