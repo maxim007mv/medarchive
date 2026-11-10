@@ -32,7 +32,8 @@ def test_csrf_token_is_bound_to_session() -> None:
     assert not csrf_valid("x" * 43, session_id, token)
     assert not csrf_valid(SECRET, session_id, None)
     assert not csrf_valid(SECRET, session_id, "")
-    assert not csrf_valid(SECRET, session_id, token[:-1] + "A")
+    # A different last character: "A" alone would equal the token one time in 16.
+    assert not csrf_valid(SECRET, session_id, token[:-1] + ("B" if token[-1] == "A" else "A"))
 
 
 def test_consent_evidence_matches_shown_texts() -> None:
