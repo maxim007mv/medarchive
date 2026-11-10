@@ -48,6 +48,8 @@ STACK_ENV = {
     "TLS_STORAGE_PORT": "9444",
     "S3_PUBLIC_ENDPOINT": "https://localhost:9444",
     "IMAGE_TAG": "qa",
+    # Own subnet: Docker rejects a second stack whose network overlaps another's.
+    "NET_PREFIX": "10.157.4",
 }
 WEB_URL = "https://localhost:3444"
 API_URL = "http://localhost:8900"
@@ -390,7 +392,8 @@ def run_playwright(gate: Gate, name: str, grep: str, *extra: str) -> None:
     results_dir = gate.logs / re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     gate.run(
         name,
-        ["pnpm", "--filter", "e2e", "exec", "playwright", "test", "--grep", grep, *extra],
+        # Three workers: each test seeds its own archive, and the Docker VM is shared (D-011).
+        ["pnpm", "--filter", "e2e", "exec", "playwright", "test", "--workers=3", "--grep", grep, *extra],
         env={"E2E_BASE_URL": WEB_URL, "E2E_RESULTS_DIR": str(results_dir)},
         timeout_s=3600,
         summarize=from_report(lambda: read_playwright(results_dir / "report.json"), gate),

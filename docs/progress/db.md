@@ -48,7 +48,7 @@
 
 Тесты по ID: DB-01 цикл upgrade, downgrade base, upgrade на пустой базе; TC-091 без контекста `ma_app` и `ma_worker` видят 0 строк во всех таблицах; TC-092 контекст пуст после COMMIT и после ROLLBACK на том же соединении; DB-03 перекрёстные SELECT, UPDATE, DELETE по id дают 0 строк, вставка в чужой архив `42501`; DB-02 `ma_app` и `ma_worker` не могут ALTER, DROP, TRUNCATE, CREATE, DROP POLICY; прямого доступа к таблицам входа, `purge_queue`, `audit_log` и секциям нет; каждая функция `SECURITY DEFINER` закреплена `search_path` и вызывается одной ролью; DB-07 повтор `INSERT ... ON CONFLICT` возвращает сохранённый ответ, CHECK отклоняет неизвестную операцию и тело до завершения; DB-08 аудит пишет имена полей без значений, `UPDATE/DELETE` журнала запрещены; DB-09 воркер находит и удаляет просроченное только под контекстом архива; DB-12 пул 10 и `statement_timeout = 5s`, модели совпадают со схемой по колонкам, типам и `NULL`.
 
-Compose (отдельный проект, чтобы не трогать общий стек: `COMPOSE_PROJECT_NAME=medarchive-dbcheck IMAGE_TAG=dbcheck WEB_PORT=3391 API_PORT=8891 MINIO_PORT=9391 MINIO_CONSOLE_PORT=9392`):
+Compose (отдельный проект, чтобы не трогать общий стек: `COMPOSE_PROJECT_NAME=medarchive-dbcheck NET_PREFIX=10.157.3 IMAGE_TAG=dbcheck WEB_PORT=3391 API_PORT=8891 MINIO_PORT=9391 MINIO_CONSOLE_PORT=9392`):
 
 | Команда | Результат |
 |---|---|
