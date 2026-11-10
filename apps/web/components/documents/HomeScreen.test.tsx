@@ -32,10 +32,10 @@ describe("onboarding (FE-11)", () => {
     expect(
       screen.getByRole("link", { name: "Политика обработки персональных данных" }),
     ).toHaveAttribute("href", "/policy");
-    expect(screen.getByRole("link", { name: "Уже есть архив? Открыть по ключу" })).toHaveAttribute(
-      "href",
-      "/restore",
-    );
+    // One link for the card from 768 px and one in the pinned bar on phones; CSS shows one.
+    for (const link of screen.getAllByRole("link", { name: "Уже есть архив? Открыть по ключу" })) {
+      expect(link).toHaveAttribute("href", "/restore");
+    }
 
     await user.click(screen.getByRole("checkbox"));
 
