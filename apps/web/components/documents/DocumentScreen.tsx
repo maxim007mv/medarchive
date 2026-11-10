@@ -47,7 +47,9 @@ function LinkButton({
   return (
     <a
       href={href}
-      {...(newTab ? { target: "_blank", rel: "noopener" } : { download: "" })}
+      // No `download` attribute: `disposition=attachment` already downloads, and iOS WebKit
+      // ignores links that carry the attribute.
+      {...(newTab ? { target: "_blank", rel: "noopener" } : {})}
       className={buttonClasses({ variant: "secondary", size: "sm" })}
     >
       <span className="inline-flex items-center gap-2">

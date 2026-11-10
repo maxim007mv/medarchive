@@ -71,8 +71,9 @@ export function ExportDialog({ filters, filtered, total, matched, selectedIds, o
           {exported ? (
             <a
               href={exported.content_url}
-              download
-              onClick={onClose}
+              // No `download` attribute: the API answers with Content-Disposition: attachment, and
+              // iOS WebKit ignores links that carry the attribute. Closed after the navigation starts.
+              onClick={() => setTimeout(onClose, 0)}
               className={buttonClasses({ variant: "primary" })}
             >
               <span className="inline-flex items-center gap-2">
