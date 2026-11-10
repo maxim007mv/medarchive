@@ -60,15 +60,13 @@ export function useSession() {
   });
 }
 
+async function fetchWorkspace() {
+  const { data, response } = await request(api.GET("/api/v1/workspace"));
+  return { workspace: data, etag: response.headers.get("ETag") ?? "" };
+}
+
 export function useWorkspace({ enabled }: { enabled: boolean }) {
-  return useQuery({
-    queryKey: queryKeys.workspace,
-    queryFn: async () => {
-      const { data, response } = await request(api.GET("/api/v1/workspace"));
-      return { workspace: data, etag: response.headers.get("ETag") ?? "" };
-    },
-    enabled,
-  });
+  return useQuery({ queryKey: queryKeys.workspace, queryFn: fetchWorkspace, enabled });
 }
 
 /** All pages of the list for the filters (FE-13); following pages are fetched right after the first. */
@@ -268,14 +266,21 @@ export function useRotateKey() {
   });
 }
 
+/** Deletes the archive with the `If-Match` of its summary, loading the summary if it is not cached yet. */
 export function useDeleteWorkspace() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (etag: string) =>
-      call(
+    mutationFn: async () => {
+      const { etag } = await queryClient.ensureQueryData({
+        queryKey: queryKeys.workspace,
+        queryFn: fetchWorkspace,
+      });
+      return call(
         api.DELETE("/api/v1/workspace", {
           params: { header: { "If-Match": etag, ...(await csrfHeader()) } },
         }),
-      ),
+      );
+    },
   });
 }
 

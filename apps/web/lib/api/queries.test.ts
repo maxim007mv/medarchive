@@ -288,11 +288,15 @@ describe("archive and key", () => {
 
     const rotate = renderHook(() => useRotateKey(), { wrapper });
     await act(() => rotate.result.current.mutateAsync("rotate-key-0123456789"));
+    routes["GET /api/v1/workspace"] = () =>
+      json(200, { id: "w", created_at: "x", document_count: 6 }, { ETag: '"w3"' });
     const remove = renderHook(() => useDeleteWorkspace(), { wrapper });
-    await act(() => remove.result.current.mutateAsync('"w3"'));
+    await act(() => remove.result.current.mutateAsync());
 
     expect(calls[0]?.headers.get("Idempotency-Key")).toBe("rotate-key-0123456789");
-    expect(calls[1]?.headers.get("If-Match")).toBe('"w3"');
+    // The summary was not cached, so its ETag is loaded first.
+    expect(calls[1]?.url).toMatch(/\/api\/v1\/workspace$/);
+    expect(calls[2]?.headers.get("If-Match")).toBe('"w3"');
   });
 
   test("export sends its Idempotency-Key", async () => {

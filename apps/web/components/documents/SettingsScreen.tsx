@@ -67,7 +67,8 @@ export function SettingsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const session = useSession();
-  const workspace = useWorkspace({ enabled: Boolean(session.data) });
+  // Warms the cache for the `If-Match` of «Удалить архив».
+  useWorkspace({ enabled: Boolean(session.data) });
   const offlineReason = useOfflineReason();
 
   const rotate = useRotateKey();
@@ -109,9 +110,8 @@ export function SettingsScreen() {
   }
 
   function removeArchive() {
-    const etag = workspace.data?.etag;
-    if (!etag || !isDeleteWordTyped(word)) return;
-    deleteWorkspace.mutate(etag, {
+    if (!isDeleteWordTyped(word)) return;
+    deleteWorkspace.mutate(undefined, {
       onSuccess: (scheduled) => {
         setPurgeBefore(scheduled.purge_before);
         forgetArchive(queryClient);
