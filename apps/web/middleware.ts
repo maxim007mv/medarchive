@@ -11,7 +11,7 @@ export function contentSecurityPolicy(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'${isDev ? " 'unsafe-eval'" : ""}`,
     // A nonce makes browsers ignore 'unsafe-inline', so dev, which injects unnonced <style>, gets
-    // only the latter. In production Next puts the nonce on its own inline styles.
+    // only the latter. Next's built-in 404 page styles carry no nonce: use app/not-found.tsx.
     `style-src 'self' ${isDev ? "'unsafe-inline'" : `'nonce-${nonce}'`}`,
     `connect-src 'self' ${storageOrigin}`,
     // The PDF viewer is an iframe on /api/v1/documents/{id}/content (FE-16).
