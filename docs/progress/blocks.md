@@ -17,7 +17,7 @@
 | 7 | Все шаги блокируют: schemathesis `--checks all`, pip-audit, `pnpm audit --prod` (high и critical), gitleaks, Trivy образов приложения и базовых образов (fixable HIGH и CRITICAL = 0), жёсткость образов и ролей БД (OPS-05, OPS-07), ПДн (TC-096), ZAP baseline без High, k6 p95 `GET /documents` < 300 мс при 1000 документов и 50 VU; E2E три прогона подряд (`--repeat-each=3`) | все P0 и P1 в объёме (45 P0: в каталоге 46, TC-104 вне объёма по ADR-042; TC-100..TC-103 тоже вне объёма), в том числе TC-094..TC-099, TC-110..TC-115 |
 | 9 | Выпуск: весь набор ещё раз, TC-080 и TC-081, протокол QA-07 (`docs/release-report.md`) | как в блоке 7 и TC-080, TC-081 |
 
-E2E идёт в две фазы (D-006): сначала все тесты блоков 1..N с `RATE_LIMITS_ENABLED=false` (каждый тест создаёт свой архив с одного адреса), затем TC-082 и TC-098 по одному с лимитами по умолчанию; k6 идёт в первой фазе, schemathesis, проверка ПДн и ZAP во второй. Перед каждой фазой Redis стенда очищается: в нём только счётчики лимитов.
+E2E идёт в две фазы (D-006): сначала все тесты блоков 1..N с `RATE_LIMITS_ENABLED=false` (каждый тест создаёт свой архив с одного адреса), затем TC-082 и TC-098 по одному с лимитами по умолчанию; schemathesis и k6 идут в первой фазе (иначе 429 закрывает логику операций), проверка ПДн и ZAP во второй. Перед каждой фазой Redis стенда очищается: в нём только счётчики лимитов.
 
 Браузер E2E ходит на стенд через профиль `tls` (Caddy, `https://localhost:3444`, хранилище `https://localhost:9444`): WebKit в Playwright не сохраняет `Secure`-cookie `__Host-ma_sid` на `http://localhost` (запрос FRONTEND-SCREENS, запасной вариант ADR-048). API-тесты и schemathesis идут на api :8900 напрямую.
 
@@ -277,9 +277,75 @@ E2E-тесты блоков после 3 (pending, не запускались):
 
 ## Блок 4
 
+#### Прогон 11.11.2026 01:18 MSK, `1ccbebb`: FAIL
+
+Коммит `1ccbebb` «docs(QA-08): block 2 gate PASS on f38a771, block 3 FAIL on D-009 only». Стек `medarchive_qa` (браузер `https://localhost:3444`, api :8900), логи `/tmp/medarchive-gate-logs/20261111-0027-1ccbebb-b4`. Команда `tools/verify_block.sh 4`.
+
+| Шаг | Блокирует | Итог | Подробности | с |
+|---|---|---|---|---|
+| deps: pnpm install | да | pass | exit 0; лог `01-deps-pnpm-install.log` | 0 |
+| deps: uv sync | да | pass | exit 0; лог `02-deps-uv-sync.log` | 0 |
+| make fixtures | да | pass | exit 0; лог `03-make-fixtures.log` | 0 |
+| playwright browsers | да | pass | exit 0; лог `04-playwright-browsers.log` | 0 |
+| make lint | да | pass | exit 0; лог `05-make-lint.log` | 4 |
+| make typecheck | да | pass | exit 0; лог `06-make-typecheck.log` | 12 |
+| make test-api (pytest) | да | pass | 615 passed, 0 failed, 0 skipped (exit 0); лог `07-make-test-api-pytest.log` | 159 |
+| make test-web (vitest) | да | pass | 249 passed, 0 failed, 0 skipped (exit 0); лог `08-make-test-web-vitest.log` | 11 |
+| web build | да | pass | exit 0; лог `09-web-build.log` | 25 |
+| compose up, all services healthy | да | pass | exit 0; api healthy, db healthy, migrate exited(0), minio healthy, minio-init exited(0), redis healthy, tls healthy, web healthy, worker healthy; лог `10-compose-up-all-services-healthy.log` | 55 |
+| UI unit tests (FE-03..FE-09) | да | pass | 100 passed, 0 failed, 0 skipped (components/) | 0 |
+| error catalog contract (BE-03) | да | pass | 3 passed, 0 failed, 0 skipped (catalog) | 0 |
+| migrations up/down on PostgreSQL 17 | да | pass | PostgreSQL 17: upgrade head, downgrade base, upgrade head passed; лог `13-migrations-up-down-on-postgresql-17.log` | 18 |
+| migrations up/down on PostgreSQL 18 | да | pass | PostgreSQL 18: upgrade head, downgrade base, upgrade head passed; лог `14-migrations-up-down-on-postgresql-18.log` | 10 |
+| hardening (OPS-05, OPS-07) | нет | pass | medarchive/api:qa user=api healthcheck=yes; medarchive/web:qa user=node healthcheck=yes; api read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; web read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; migrate read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; api uid=10001; web uid=1000; api role=ma_app migrate role=ma_owner; app tables not owned | 2 |
+| api with RATE_LIMITS_ENABLED=false | да | pass | exit 0; лог `16-api-with-rate-limits-enabled-false.log` | 23 |
+| e2e @b[1-4]\b, limits off | да | fail | 43 passed, 12 failed, 0 skipped (exit 1); лог `17-e2e-b-1-4-b-limits-off.log` | 1120 |
+| api with RATE_LIMITS_ENABLED=true | да | pass | exit 0; лог `18-api-with-rate-limits-enabled-true.log` | 14 |
+| schemathesis --checks all | нет | fail | 10 passed, 1 failed, 0 skipped (exit 1); лог `19-schemathesis-checks-all.log` | 5 |
+| schemathesis --checks all, session-ending | нет | pass | 1 passed, 0 failed, 0 skipped (exit 0); лог `20-schemathesis-checks-all-session-ending.log` | 1 |
+| PII scan: logs and DB dump (TC-096) | нет | pass | 19 markers; in logs 0, in DB plaintext 0, dump 238750 bytes | 0 |
+| pip-audit (OPS-04) | нет | pass | 52 packages, vulnerabilities []; лог `22-pip-audit-ops-04.log` | 4 |
+| pnpm audit --prod (OPS-04) | нет | pass | info 0, low 0, moderate 0, high 0, critical 0; лог `23-pnpm-audit-prod-ops-04.log` | 1 |
+| gitleaks, git history (OPS-04) | нет | pass | findings by rule [] (values redacted); лог `24-gitleaks-git-history-ops-04.log` | 1 |
+| trivy medarchive/api:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `25-trivy-medarchive-api-qa-ops-04-ops-05.log` | 1 |
+| trivy medarchive/web:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `26-trivy-medarchive-web-qa-ops-04-ops-05.log` | 0 |
+| trivy python:3.12-slim-bookworm (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `27-trivy-python-3-12-slim-bookworm-ops-04-ops-05.log` | 0 |
+| trivy node:22-alpine (OPS-04, OPS-05) | нет | fail | fixable CRITICAL 0 [], HIGH 9 ['CVE-2026-102276', 'CVE-2026-102278', 'CVE-2026-13149', 'CVE-2026-14257', 'CVE-2026-33671']; лог `28-trivy-node-22-alpine-ops-04-ops-05.log` | 0 |
+
+| TC | Итог | Тесты |
+|---|---|---|
+| TC-001 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-002 | pass | e2e:api passed, e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-003 | pass | e2e:api passed, pytest passed |
+| TC-004 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-010 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, pytest passed, vitest passed |
+| TC-011 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, pytest passed |
+| TC-012 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, pytest passed, vitest passed |
+| TC-013 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, pytest passed, vitest passed |
+| TC-014 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, pytest passed, vitest passed |
+| TC-015 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, pytest passed, vitest passed |
+| TC-016 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, pytest passed, vitest passed |
+| TC-017 | pass | pytest passed |
+| TC-018 | pass | pytest passed |
+| TC-019 | pass | e2e:api passed, e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-020 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, vitest passed |
+| TC-021 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, vitest passed |
+| TC-022 | pass | e2e:api passed, pytest passed |
+| TC-023 | pass | e2e:api passed, pytest passed |
+| TC-024 | pass | e2e:api passed, pytest passed |
+| TC-091 | pass | pytest passed |
+| TC-092 | pass | pytest passed |
+| TC-093 | pass | e2e:api passed, pytest passed, vitest passed |
+
+E2E-тесты блоков после 4 (pending, не запускались): 170.
+
+Итог: FAIL. Все 9 падений WebKit (TC-010..TC-016, TC-020, TC-021) из-за D-014: тесты ждут клика по «Добавить PDF» 120 с. Падение schemathesis ST202 на `POST /api/v1/documents` (422 `idempotency_key_reused`) вызвал хук гейта: генератор повторил ключ с другим телом, API ответил верно; хук теперь даёт каждому случаю свой ключ, schemathesis идёт без лимитов. Политика `/policy`: D-009. Проверка ПДн (TC-096): 19 маркеров, в логах 0, открытым текстом в дампе БД 0.
+
 ### Дефекты
 
-Нет.
+| ID | Класс | Владелец | Что | Шаги | Ожидаемо | Фактически | Статус |
+|---|---|---|---|---|---|---|---|
+| D-014 | К2, мобильный | FRONTEND-SCREENS | iPhone 13 (WebKit, 390 x 664), архив создан, документов 0: закреплённая кнопка «Добавить PDF» видна, но её перекрывает `<main>` онбординга M01 (`span.col-start-1.row-start-1` внутри `main.mx-auto.grid` перехватывает касание) | Гейт блока 4 на `1ccbebb`, `e2e/tests/screens/upload.spec.ts` на `webkit-iphone13`; трасса `e2e-b-1-4-b-limits-off/artifacts/screens-upload-…-webkit-iphone13/trace.zip` | Касание открывает «Новый документ» | Playwright 120 с повторяет клик: `<span class="col-start-1 row-start-1 …"> from <main …> subtree intercepts pointer events`; 9 тестов загрузки на WebKit падают по таймауту. На Chromium 1440 x 900 те же тесты зелёные | открыт |
 
 ## Блок 5
 

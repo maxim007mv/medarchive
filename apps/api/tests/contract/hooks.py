@@ -1,7 +1,8 @@
 """Schemathesis hooks for `make contract`: `SCHEMATHESIS_HOOKS=tests.contract.hooks`.
 
 Every generated request carries the session and CSRF token of a fresh archive with accepted
-consent. A 401 (the fuzzer logged out or deleted the archive) makes Schemathesis fetch a new one.
+consent and a unique Idempotency-Key. A 401 (the fuzzer logged out or deleted the archive) makes
+Schemathesis fetch a new archive.
 """
 
 import os
@@ -16,6 +17,9 @@ BASE_URL = os.environ["CONTRACT_BASE_URL"]
 POLICY_VERSION = "2026-11-10"
 SESSION_COOKIE = "__Host-ma_sid"
 ONE_HOUR_S = 3600
+IDEMPOTENCY_KEY = "Idempotency-Key"
+# Bounds of the IdempotencyKey parameter in openapi.yaml.
+MIN_KEY_LENGTH, MAX_KEY_LENGTH = 16, 64
 
 
 @schemathesis.auth(refresh_interval=ONE_HOUR_S)
@@ -34,3 +38,8 @@ class FreshArchive:
         session, csrf_token = data
         case.cookies[SESSION_COOKIE] = session
         case.headers["X-CSRF-Token"] = csrf_token
+        # A schema-valid key the generator repeats with another body is rightly answered 422
+        # idempotency_key_reused; missing and malformed keys stay for the negative cases.
+        key = case.headers.get(IDEMPOTENCY_KEY)
+        if key is not None and MIN_KEY_LENGTH <= len(key) <= MAX_KEY_LENGTH:
+            case.headers[IDEMPOTENCY_KEY] = str(uuid.uuid4())
