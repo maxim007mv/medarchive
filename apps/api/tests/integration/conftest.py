@@ -14,6 +14,7 @@ from pathlib import Path
 
 import boto3
 import pytest
+from api_stack import Api, redis_container, running_api, settings_for, write_kek
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from testcontainers.community.minio import MinioContainer
 from testcontainers.community.postgres import PostgresContainer
@@ -140,3 +141,18 @@ def app_sessions(app_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 @pytest.fixture
 def worker_sessions(worker_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return create_sessionmaker(worker_engine)
+
+
+@pytest.fixture(scope="session")
+def redis_url() -> Iterator[str]:
+    yield from redis_container()
+
+
+@pytest.fixture
+async def api(
+    database: DatabaseUrls, storage: ObjectStorage, redis_url: str, tmp_path: Path
+) -> AsyncIterator[Api]:
+    """The app with its lifespan over the shared containers and a fresh KEK."""
+    settings = settings_for(database.app, redis_url, write_kek(tmp_path / "kek.json"))
+    async with running_api(settings, storage) as running:
+        yield running
