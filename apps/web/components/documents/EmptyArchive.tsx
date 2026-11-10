@@ -153,8 +153,16 @@ export function EmptyArchive({ needsConsent, onFiles, busy, error, disabledReaso
             </Link>
           </div>
         )}
-        {/* Phones pin the main action above the home indicator (M01, TZ-frontend §4). */}
-        <div className="pb-safe from-bg flex flex-col items-center gap-2 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-20 max-md:bg-linear-to-t max-md:from-70% max-md:px-4 max-md:pt-6 md:contents">
+        {/* Onboarding on phones pins the main action above the home indicator (M01, TZ-frontend §4);
+            an existing empty archive already has the pinned «Добавить PDF» of the header there. */}
+        <div
+          className={cn(
+            "md:contents",
+            needsConsent
+              ? "pb-safe from-bg flex flex-col items-center gap-2 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-20 max-md:bg-linear-to-t max-md:from-70% max-md:px-4 max-md:pt-6"
+              : "hidden",
+          )}
+        >
           <Button
             size="lg"
             icon={Plus}
