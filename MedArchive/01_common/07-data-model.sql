@@ -1,5 +1,8 @@
--- Медархив: схема БД v1 (PostgreSQL 17+, проверено на 18.6)
--- Миграция 0001. Выполняется ролью ma_owner. Приложение работает ролью ma_app (без BYPASSRLS).
+-- Медархив: схема БД v1 (PostgreSQL 17+, проверено на 17 и 18)
+-- Эталон миграций apps/api/migrations: часть 1 = ревизия 0001_init, часть 2 = схема и права ревизии
+-- 0002_privileges_functions (ADR-044, ADR-045, ADR-047). Исполняемая истина: миграции; этот файл
+-- держится в соответствии с ними. В репозитории роли создаёт infra/postgres/init/01-roles.sh,
+-- миграции идут от ma_owner. Приложение работает ролью ma_app (без BYPASSRLS).
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -167,8 +170,9 @@ CREATE TABLE audit_log (
   ip_prefix     cidr,                    -- IPv4 /24, IPv6 /48
   PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
-CREATE TABLE audit_log_2026_11 PARTITION OF audit_log FOR VALUES FROM ('2026-11-01') TO ('2026-12-01');
-CREATE TABLE audit_log_2026_12 PARTITION OF audit_log FOR VALUES FROM ('2026-12-01') TO ('2027-01-01');
+-- Границы в UTC: без +00 они зависят от часового пояса сервера. Следующие секции: app.ensure_audit_partitions() (0002)
+CREATE TABLE audit_log_2026_11 PARTITION OF audit_log FOR VALUES FROM ('2026-11-01 00:00+00') TO ('2026-12-01 00:00+00');
+CREATE TABLE audit_log_2026_12 PARTITION OF audit_log FOR VALUES FROM ('2026-12-01 00:00+00') TO ('2027-01-01 00:00+00');
 CREATE TABLE audit_log_default PARTITION OF audit_log DEFAULT;
 CREATE INDEX audit_log_ws_time ON audit_log (workspace_id, occurred_at DESC);
 
@@ -194,20 +198,21 @@ BEGIN
 END $$;
 CREATE TRIGGER documents_bump BEFORE UPDATE ON documents FOR EACH ROW EXECUTE FUNCTION app.bump_version();
 
-CREATE FUNCTION app.audit_documents() RETURNS trigger LANGUAGE plpgsql SET search_path = app, pg_temp AS $$
+CREATE FUNCTION app.audit_documents() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
 DECLARE f text[] := '{}';
 BEGIN
   IF TG_OP = 'UPDATE' THEN
-    IF NEW.title_ct IS DISTINCT FROM OLD.title_ct THEN f := f || 'title'; END IF;
-    IF NEW.type_code IS DISTINCT FROM OLD.type_code THEN f := f || 'type'; END IF;
-    IF NEW.document_date IS DISTINCT FROM OLD.document_date THEN f := f || 'document_date'; END IF;
-    IF NEW.note_ct IS DISTINCT FROM OLD.note_ct THEN f := f || 'note'; END IF;
-    INSERT INTO audit_log (workspace_id, session_id, action, entity_id, changed_fields, request_id)
+    -- array_append, а не f || 'title': нетипизированный литерал разбирается как text[] и падает
+    IF NEW.title_ct IS DISTINCT FROM OLD.title_ct THEN f := array_append(f, 'title'); END IF;
+    IF NEW.type_code IS DISTINCT FROM OLD.type_code THEN f := array_append(f, 'type'); END IF;
+    IF NEW.document_date IS DISTINCT FROM OLD.document_date THEN f := array_append(f, 'document_date'); END IF;
+    IF NEW.note_ct IS DISTINCT FROM OLD.note_ct THEN f := array_append(f, 'note'); END IF;
+    INSERT INTO app.audit_log (workspace_id, session_id, action, entity_id, changed_fields, request_id)
     VALUES (NEW.workspace_id, nullif(current_setting('app.session_id', true),'')::uuid,
             CASE WHEN NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL THEN 'document.delete' ELSE 'document.update' END,
             NEW.id, f, current_setting('app.request_id', true));
   ELSIF TG_OP = 'INSERT' THEN
-    INSERT INTO audit_log (workspace_id, session_id, action, entity_id, request_id)
+    INSERT INTO app.audit_log (workspace_id, session_id, action, entity_id, request_id)
     VALUES (NEW.workspace_id, nullif(current_setting('app.session_id', true),'')::uuid, 'document.create', NEW.id, current_setting('app.request_id', true));
   END IF;
   RETURN NULL;
@@ -268,4 +273,64 @@ ALTER FUNCTION app.find_access_key(text) OWNER TO ma_auth;
 REVOKE ALL ON FUNCTION app.resolve_session(bytea), app.find_access_key(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.resolve_session(bytea), app.find_access_key(text) TO ma_app;
 GRANT EXECUTE ON FUNCTION app.current_workspace() TO ma_app, ma_worker;
+COMMIT;
+
+-- Часть 2. Ревизия 0002_privileges_functions: схема и права.
+-- Функции SECURITY DEFINER этой ревизии (тела в миграции, сигнатуры и поведение в docs/db.md; ADR-044):
+-- владелец ma_auth, SET search_path = pg_catalog, pg_temp, архив из app.current_workspace(), EXECUTE одной роли.
+--   ma_app:    create_workspace, create_session, touch_session, revoke_sessions, issue_access_key,
+--              revoke_access_key, delete_workspace, soft_delete_document, enqueue_purge,
+--              claim_workspace_create_key, complete_workspace_create_key, release_workspace_create_key
+--   ma_worker: workspaces_due_for_purge, purge_expired_workspace_create_keys,
+--              ensure_audit_partitions (владелец ma_owner, без BYPASSRLS)
+--   никому:    require_workspace (внутренняя проверка контекста)
+BEGIN;
+SET search_path = app, public;
+
+-- ADR-047: ключи полей, файлов и слепого индекса лежат одной связкой в dek_ciphertext.
+ALTER TABLE workspaces DROP COLUMN bidx_key_ciphertext;
+-- ADR-041: криптоудаление ставит dek_ciphertext = NULL, это допустимо только у удалённого архива.
+ALTER TABLE workspaces ALTER COLUMN dek_ciphertext DROP NOT NULL;
+ALTER TABLE workspaces ADD CONSTRAINT workspaces_dek_kept_until_deleted
+  CHECK (dek_ciphertext IS NOT NULL OR deleted_at IS NOT NULL);
+-- original_name из POST /uploads хранится зашифрованным до POST /documents (document_files.original_name_ct).
+ALTER TABLE uploads ADD COLUMN original_name_ct bytea;
+
+-- ADR-045: все операции с Idempotency-Key внутри архива и тело ответа.
+ALTER TABLE idempotency_keys DROP CONSTRAINT idempotency_keys_operation_check;
+ALTER TABLE idempotency_keys ADD CONSTRAINT idempotency_keys_operation_check
+  CHECK (operation IN ('documents.create','exports.create','suggestions.create','uploads.create','workspace.rotateKey'));
+ALTER TABLE idempotency_keys ADD COLUMN response_body_ct bytea;  -- AEAD ключом архива; заголовков не хранит
+ALTER TABLE idempotency_keys ADD CONSTRAINT idempotency_keys_body_when_completed
+  CHECK (response_body_ct IS NULL OR state = 'completed');
+
+-- ADR-045: POST /workspaces, архива ещё нет. Ключ хранится как SHA-256. Политик и прав для ролей приложения нет:
+-- доступ только через функции claim/complete/release_workspace_create_key и purge_expired_workspace_create_keys.
+CREATE TABLE workspace_create_keys (
+  key_sha256       bytea PRIMARY KEY CHECK (octet_length(key_sha256) = 32),
+  fingerprint      bytea NOT NULL CHECK (octet_length(fingerprint) = 32),
+  state            text NOT NULL DEFAULT 'in_progress' CHECK (state IN ('in_progress','completed')),
+  response_status  smallint,
+  workspace_id     uuid REFERENCES workspaces(id) ON DELETE CASCADE,
+  response_body_ct bytea,
+  expires_at       timestamptz NOT NULL DEFAULT now() + interval '24 hours',
+  CHECK ((state = 'completed') = (response_status IS NOT NULL)),
+  CHECK (state = 'in_progress' OR (workspace_id IS NOT NULL AND response_body_ct IS NOT NULL))
+);
+CREATE INDEX workspace_create_keys_expiring ON workspace_create_keys (expires_at);
+ALTER TABLE workspace_create_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workspace_create_keys FORCE ROW LEVEL SECURITY;
+
+-- Права сверх части 1
+GRANT DELETE ON idempotency_keys TO ma_app;   -- ADR-045: снять in_progress после ответа 4xx или 5xx (под RLS)
+GRANT UPDATE ON purge_queue TO ma_worker;     -- счётчик попыток и next_attempt_at
+GRANT INSERT, UPDATE ON workspaces, sessions, access_keys TO ma_auth;
+GRANT SELECT, INSERT, UPDATE ON consents TO ma_auth;
+GRANT INSERT ON purge_queue TO ma_auth;
+GRANT SELECT, INSERT, UPDATE, DELETE ON workspace_create_keys TO ma_auth;
+GRANT SELECT ON documents, uploads, exports, idempotency_keys TO ma_auth;
+GRANT UPDATE ON documents TO ma_auth;         -- soft_delete_document: hide_deleted не даёт ma_app сделать это самому
+GRANT INSERT ON audit_log TO ma_auth;         -- триггер аудита при soft_delete_document
+ALTER FUNCTION app.resolve_session(bytea) SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION app.find_access_key(text) SET search_path = pg_catalog, pg_temp;
 COMMIT;

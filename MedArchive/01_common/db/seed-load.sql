@@ -8,8 +8,8 @@ INSERT INTO titles VALUES ('Общий анализ крови'),('Биохим�
 CREATE FUNCTION pg_temp.bidx(title text, k bytea) RETURNS bigint[] LANGUAGE sql IMMUTABLE AS $$
   SELECT array_agg(DISTINCT ('x'||encode(substr(hmac(convert_to(g,'UTF8'), k, 'sha256'),1,8),'hex'))::bit(64)::bigint)
   FROM unnest(show_trgm(lower(replace(title,'ё','е')))) g $$;
-INSERT INTO workspaces (id, dek_ciphertext, bidx_key_ciphertext, kek_key_id)
-SELECT gen_random_uuid(), gen_random_bytes(64), gen_random_bytes(64), 'abj-kek-1' FROM generate_series(1,2001);
+INSERT INTO workspaces (id, dek_ciphertext, kek_key_id)
+SELECT gen_random_uuid(), gen_random_bytes(64), 'abj-kek-1' FROM generate_series(1,2001);
 CREATE TEMP TABLE ws AS SELECT id, row_number() OVER (ORDER BY id) n, gen_random_bytes(32) k FROM workspaces;
 INSERT INTO documents (id, workspace_id, type_code, title_ct, title_bidx, note_ct, document_date, uploaded_at)
 SELECT gen_random_uuid(), ws.id, (ARRAY['analysis','conclusion','other'])[1 + (g % 3)],

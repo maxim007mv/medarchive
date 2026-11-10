@@ -30,8 +30,7 @@ erDiagram
   documents ||--|| document_files : "файл"
 
   workspaces { uuid id PK
-    bytea dek_ciphertext "Tink keyset под KEK"
-    bytea bidx_key_ciphertext
+    bytea dek_ciphertext "связка Tink под KEK, NULL после удаления"
     text kek_key_id
     timestamptz deleted_at
     timestamptz purge_after }
@@ -57,6 +56,7 @@ erDiagram
     text quarantine_key UK
     int max_bytes
     text status
+    bytea original_name_ct
     timestamptz expires_at }
   documents { uuid id PK "UUIDv7"
     uuid workspace_id FK
@@ -117,6 +117,8 @@ erDiagram
 | consents | частичный UNIQUE `(workspace_id) WHERE withdrawn_at IS NULL` | Два активных согласия |
 | idempotency_keys | PK `(workspace_id, key)` | Ключ одного клиента не находит запись другого (S19, раздел 5: составной ключ поиска) |
 | workspaces | `(deleted_at IS NULL) = (purge_after IS NULL)` | Удалённое пространство без срока уничтожения |
+| workspaces | `workspaces_dek_kept_until_deleted`: `dek_ciphertext IS NOT NULL OR deleted_at IS NOT NULL` (0002) | Стёртый ключ у живого архива |
+| idempotency_keys | CHECK операций, `response_body_ct` только при `state = 'completed'` (0002) | Неизвестную операцию и тело незавершённой попытки |
 
 Все проверки дублируются в API (pydantic) ради понятного текста ошибки, но источник истины база: ошибка в коде не запишет мусор.
 
@@ -129,7 +131,7 @@ erDiagram
 | Q1 Первая страница, 51 строка, 10 000 документов | `documents_list (workspace_id, list_key, uploaded_at, id) INCLUDE (type_code, document_date) WHERE deleted_at IS NULL` | Index Scan, без сортировки | 0,117 мс |
 | Q2 Следующая страница по курсору | тот же | Index Scan, `ROW(list_key, uploaded_at, id) > ROW(...)` в Index Cond | 0,088 мс |
 | Q3 Период по дате документа + `matched` + `undated_excluded` | тот же | Index Only Scan, счётчики одним проходом через `count(*) FILTER` | 2,40 мс |
-| Q4 Поиск «анализ» (15% документов совпадают) | `documents_title_bidx USING gin (workspace_id, title_bidx)` (btree_gin) | Bitmap Index Scan по `workspace_id`, `title_bidx @>` в Filter, top-N heapsort | 5,84 мс (18.6), 2,7 мс (17.8) |
+| Q4 Поиск «анализ» (15% документов совпадают) | `documents_title_bidx USING gin (workspace_id, title_bidx)` (btree_gin) | Bitmap Index Scan по `workspace_id`, `title_bidx @>` в Filter, top-N heapsort | 5,84 мс (18.6, эталон), 7,36 мс (18, сид тестов `tests/db`), 2,7 мс (17.8) |
 | Q5 Период по дате загрузки в Europe/Moscow | `documents_by_upload (workspace_id, uploaded_at, id)` | Index Scan, границы суток в Index Cond | 0,072 мс |
 | Q6 Только без даты | `documents_list` (`list_key = 2147483647`) | Index Only Scan | 0,033 мс |
 | Q7 Обычное пространство, 100 документов | `documents_list` | Index Scan | 0,059 мс |
@@ -141,7 +143,7 @@ erDiagram
 4. **`INCLUDE (type_code, document_date)`** даёт Index Only Scan для счётчиков и списка без даты.
 5. **GIN по `(workspace_id, title_bidx)`** через `btree_gin`: индекс сразу ограничен пространством. Под `ma_app` условие `title_bidx @> ...` остаётся в `Filter`, а не в Index Cond: функция `arraycontains` не помечена `LEAKPROOF`, и при FORCE RLS планировщик не переносит её в индекс раньше условий политики (под суперпользователем без RLS тот же запрос даёт `@>` в Index Cond; явные классы операторов план не меняют; ADR-046). Время укладывается в бюджет, совпадения точные, ложных срабатываний 0 из 1457.
 
-Бюджет: запрос к БД p95 ≤ 10 мс на пространство до 10 000 документов; CI прогоняет `db/explain-queries.sql` на сид-данных и падает, если в плане Q1, Q2, Q5, Q6 появился `Seq Scan` или `Sort` (проверка `EXPLAIN (FORMAT JSON)`, S37).
+Бюджет: запрос к БД p95 ≤ 10 мс на пространство до 10 000 документов; Q4 ближе всех к нему (7,36 мс). CI прогоняет запросы Q1..Q7 на сид-данных под `ma_app` (`EXPLAIN (ANALYZE, FORMAT JSON)`, S37) и падает, если в плане есть узел вне списка допустимых для запроса или время больше 10 мс. Допустимые узлы: Q1, Q2, Q7 Index Scan по `documents_list`; Q3, Q6 Index Only Scan по `documents_list`; Q4 Bitmap Index Scan по `documents_title_bidx`, Bitmap Heap Scan и Sort (top-N); Q5 Index Scan по `documents_by_upload` или Bitmap Index Scan по `documents_by_upload`, Bitmap Heap Scan и Sort. Во всех запросах разрешены Limit, Result, Aggregate; `Seq Scan` по `documents` запрещён везде. Q5 выбирает между Index Scan и Bitmap Heap Scan + Sort по физическому порядку строк (корреляции `workspace_id`): на перемешанных данных реального архива второй вариант законен, оба укладываются в бюджет (0,13 мс и около 0,6 мс).
 
 ## 5. Поиск по зашифрованному названию: слепой индекс триграмм
 
@@ -171,7 +173,7 @@ erDiagram
 
 ## 7. Row-Level Security
 
-1. Роли: `ma_owner` (владелец схемы, только миграции), `ma_app` (API, `NOBYPASSRLS`), `ma_worker` (фоновые задачи, `NOBYPASSRLS`), `ma_auth` (`NOLOGIN BYPASSRLS`, владеет только двумя функциями входа).
+1. Роли: `ma_owner` (владелец схемы, только миграции), `ma_app` (API, `NOBYPASSRLS`), `ma_worker` (фоновые задачи, `NOBYPASSRLS`), `ma_auth` (`NOLOGIN BYPASSRLS`, владеет функциями входа и записи миграций 0001 и 0002, ADR-044).
 2. На всех таблицах с данными `ENABLE` и `FORCE ROW LEVEL SECURITY`. Без политики действует запрет по умолчанию (S32: «If no policy exists for the table, a default-deny policy is used»), `FORCE` распространяет политики и на владельца.
 3. Контекст: в начале каждой транзакции API выполняет `SELECT set_config('app.workspace_id', $1, true)` (третий аргумент `true` = до конца транзакции). Это безопасно с PgBouncer в режиме transaction pooling: значение не переживает транзакцию и не утечёт следующему клиенту соединения.
 4. Политика `ws_isolation`: `workspace_id = app.current_workspace()` для чтения и `WITH CHECK` для записи.

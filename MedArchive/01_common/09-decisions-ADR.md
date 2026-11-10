@@ -465,6 +465,7 @@
 - **Почему:** Проверено на PostgreSQL 17.8 с DDL пакета: от `ma_app` `INSERT` в `workspaces`, `sessions` и `purge_queue` даёт `permission denied`, то есть `POST /workspaces`, вход по ключу и удаление документа невозможны; `ma_worker` без контекста видит 0 архивов и 0 из 6172 мягко удалённых документов сида, то есть очистка невозможна. Функции с узкими аргументами и закреплённым `search_path` повторяют уже принятый шаблон `resolve_session` и `find_access_key` (07-database, раздел 7); `pg_catalog` первым и `pg_temp` последним не дают подменить встроенные функции и операторы объектами из временной схемы
 - **Источник:** S32; 07-database, раздел 7; проверка на PostgreSQL 17.8 с `07-data-model.sql` и `db/seed-load.sql`
 - **Дополняет:** ADR-013
+- **Реализация (миграция 0002, агент DATABASE, 10.11.2026):** итоговый список функций: для `ma_app` `create_workspace`, `create_session`, `touch_session`, `revoke_sessions`, `issue_access_key`, `revoke_access_key`, `delete_workspace`, `soft_delete_document`, `enqueue_purge`, `claim_workspace_create_key`, `complete_workspace_create_key`, `release_workspace_create_key`; для `ma_worker` `workspaces_due_for_purge`, `purge_expired_workspace_create_keys`, `ensure_audit_partitions` (владелец `ma_owner`, без `BYPASSRLS`); внутренняя `require_workspace` без `EXECUTE` для ролей. `app.soft_delete_document(uuid)` добавлена, потому что RESTRICTIVE-политика `hide_deleted` требует, чтобы новая строка `UPDATE` оставалась видимой, и `UPDATE ... SET deleted_at` от `ma_app` отклоняется. Права сверх DDL: `ma_app` `DELETE` на `idempotency_keys` (снять `in_progress` после 4xx и 5xx, ADR-045), `ma_worker` `UPDATE` на `purge_queue` (счётчик попыток), `ma_auth` права на таблицы, которые пишут функции. Сигнатуры и поведение: `docs/db.md`; DDL: `07-data-model.sql`, часть 2
 
 ## ADR-045. Идемпотентность всех создающих POST с сохранённым телом ответа
 
@@ -475,6 +476,7 @@
 - **Почему:** S19: повтор с тем же ключом возвращает результат первой попытки. Без сохранённого тела повтор `rotateKey` выпустил бы ещё один ключ, а повтор `uploads.create` создал бы вторую строку загрузки. В исходном CHECK операций `uploads.create`, `workspaces.create`, `workspace.rotateKey` нет, хотя в контракте у них обязательный `Idempotency-Key`
 - **Источник:** S19; `07-data-model.sql`, таблица 8; `openapi.yaml`
 - **Дополняет:** ADR-022
+- **Реализация (миграция 0002):** колонки для заголовков ответа нет: `Location` и `ETag` повтора выводятся из сохранённого тела. CHECK `idempotency_keys_body_when_completed` не даёт сохранить тело до завершения
 
 ## ADR-046. Поиск по подстроке: триграммы запроса без граничных пробелов
 
