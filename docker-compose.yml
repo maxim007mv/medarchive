@@ -2,7 +2,8 @@ name: medarchive
 
 x-api-image: &api-image
   build: ./apps/api
-  image: medarchive/api:local
+  # IMAGE_TAG keeps a second stack (the QA gate) from retagging the images of the first.
+  image: medarchive/api:${IMAGE_TAG:-local}
 
 x-hardening: &hardening
   read_only: true
@@ -42,7 +43,7 @@ services:
     volumes:
       - minio_data:/data
     # 9000 is published because the browser uploads with presigned POST straight to storage.
-    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    ports: ["127.0.0.1:${MINIO_PORT:-9000}:9000", "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
@@ -85,7 +86,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://ma_app:${MA_APP_PASSWORD}@db:5432/medarchive
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:${MINIO_PORT:-9000}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_QUARANTINE: ma-quarantine
@@ -105,7 +106,7 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         API_ORIGIN: http://api:8000
-    image: medarchive/web:local
+    image: medarchive/web:${IMAGE_TAG:-local}
     tmpfs: [/tmp, /app/apps/web/.next/cache]
     ports: ["127.0.0.1:${WEB_PORT:-3000}:3000"]
     depends_on:
