@@ -19,8 +19,8 @@ from redis.exceptions import WatchError
 
 from app.core.errors import ErrorCode, ProblemError
 from app.core.middleware import RATE_LIMIT_HEADERS_STATE
+from app.core.security import SESSION_COOKIE
 
-SESSION_COOKIE = "__Host-ma_sid"
 _MAX_WATCH_RETRIES = 5
 
 
