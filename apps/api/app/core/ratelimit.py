@@ -126,8 +126,13 @@ def rate_limit(policy: RatePolicy) -> Callable[[Request], Awaitable[None]]:
     """
 
     async def dependency(request: Request) -> None:
-        limiter: RateLimiter = request.app.state.rate_limiter
-        decision = await limiter.hit(policy, _subject(request, policy))
+        subject = _subject(request, policy)
+        if subject is None:
+            # No session to spend: authentication answers 401 before any database work.
+            decision = Decision(True, policy.quota, 0, None)
+        else:
+            limiter: RateLimiter = request.app.state.rate_limiter
+            decision = await limiter.hit(policy, subject)
         setattr(
             request.state,
             RATE_LIMIT_HEADERS_STATE,
@@ -144,13 +149,14 @@ def rate_limit(policy: RatePolicy) -> Callable[[Request], Awaitable[None]]:
     return dependency
 
 
-def _subject(request: Request, policy: RatePolicy) -> str:
-    # The session budget is keyed by a hash of the cookie, not the resolved session: the limit
-    # runs before authentication, and requests without a cookie fall back to the client address.
+def _subject(request: Request, policy: RatePolicy) -> str | None:
+    """Budget key; None for a session policy without a session cookie."""
+    if policy.subject is Subject.IP:
+        return "ip:" + client_network(request)
+    # Keyed by a hash of the cookie, not the resolved session: the limit runs before
+    # authentication, so a forged cookie spends its own budget and then gets 401.
     cookie = request.cookies.get(SESSION_COOKIE)
-    if policy.subject is Subject.SESSION and cookie:
-        return "s:" + hashlib.sha256(cookie.encode()).hexdigest()[:32]
-    return "ip:" + client_network(request)
+    return "s:" + hashlib.sha256(cookie.encode()).hexdigest()[:32] if cookie else None
 
 
 def client_network(request: Request) -> str:
