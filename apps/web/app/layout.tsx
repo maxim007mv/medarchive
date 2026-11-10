@@ -26,8 +26,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     // The theme script sets data-theme before hydration, so the attribute differs from the server HTML.
     <html lang="ru" className={fontVariables} suppressHydrationWarning>
       <head>
-        {/* Static constant, no user data: the only way to set the theme before first paint. */}
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Static constant, no user data: the only way to set the theme before first paint.
+            Browsers hide the nonce attribute after load, so hydration sees it empty. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
       </head>
       <body>
         <Providers>{children}</Providers>

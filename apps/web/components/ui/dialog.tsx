@@ -45,7 +45,7 @@ export function Dialog({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="animate-fade-in bg-scrim fixed inset-0 z-40 flex items-end justify-center pt-12 md:items-center md:p-8">
+        <RadixDialog.Overlay className="bg-scrim motion-safe:animate-fade-in fixed inset-0 z-40 flex items-end justify-center pt-12 md:items-center md:p-8">
           <RadixDialog.Content
             // Without a description Radix would point aria-describedby at a missing element.
             {...(description ? {} : { "aria-describedby": undefined })}
@@ -60,8 +60,8 @@ export function Dialog({
               if (returnFocusTo.current instanceof HTMLElement) returnFocusTo.current.focus();
             }}
             className={cn(
-              "animate-sheet-in bg-raised pb-safe text-text shadow-3 relative flex max-h-full w-full flex-col rounded-t-2xl",
-              "md:animate-dialog-in md:rounded-2xl md:pb-6",
+              "bg-raised pb-safe motion-safe:animate-sheet-in text-text shadow-3 relative flex max-h-full w-full flex-col rounded-t-2xl",
+              "md:motion-safe:animate-dialog-in md:rounded-2xl md:pb-6",
               width === "form" ? "md:max-w-dialog-form" : "md:max-w-dialog-confirm",
             )}
           >

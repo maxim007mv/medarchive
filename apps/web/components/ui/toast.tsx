@@ -46,7 +46,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           type="background"
           duration={toast.durationMs}
           onOpenChange={(open) => !open && dismiss(toast.id)}
-          className="animate-dialog-in bg-primary text-body text-on-primary shadow-3 flex max-w-full items-center gap-4 rounded-lg py-3 pr-3 pl-4"
+          className="bg-primary motion-safe:animate-dialog-in text-body text-on-primary shadow-3 flex max-w-full items-center gap-4 rounded-lg py-3 pr-3 pl-4"
         >
           <RadixToast.Title className="min-w-0">{toast.title}</RadixToast.Title>
           {toast.action && (

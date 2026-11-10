@@ -116,6 +116,8 @@
   --ease-out: var(--ease-out);
   --ease-in: var(--ease-in);
 
+  /* Use enter animations as `motion-safe:animate-*`. With reduced motion every duration is 0 ms,
+     the browser fires no animationstart, and Radix Presence then waits forever for an exit. */
   --animate-*: initial;
   --animate-spin: spin 1s linear infinite;
   --animate-fade-in: fade-in var(--dur-base) var(--ease-out);
