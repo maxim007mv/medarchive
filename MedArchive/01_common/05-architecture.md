@@ -128,7 +128,7 @@ LIMIT :page_size + 1;
 
 ### 5.6. Экспорт (R8)
 
-`POST /api/v1/exports {scope: all|filtered|selected, filter | document_ids}` с `Idempotency-Key` фиксирует состав и возвращает `document_count`, `total_bytes` (подпись кнопки «Скачать ZIP · 157 КБ») и `content_url` на 1 час. `GET /api/v1/exports/{id}/content` отдаёт `application/zip` потоком (zipstream): PDF с именами `{YYYY-MM-DD|bez-daty}_{транслит-названия}.pdf` (запрещённые символы заменяются на `_`, длина до 120, дубликаты с суффиксом `-2`), `documents.csv` (UTF-8 с BOM) и `documents.json`.
+`POST /api/v1/exports {scope: all|filtered|selected, filter | document_ids}` с `Idempotency-Key` фиксирует состав и возвращает `document_count`, `total_bytes` (подпись кнопки «Скачать ZIP · 157 КБ») и `content_url` на 1 час. `GET /api/v1/exports/{id}/content` отдаёт `application/zip` потоком (zipstream): PDF с именами `{YYYY-MM-DD|bez-daty}_{транслит-названия}.pdf` (правила транслитерации, замены символов на `-`, длины до 80 и суффикса `-2` для совпадений в `docs/texts.md`, раздел 13), `documents.csv` (UTF-8 с BOM) и `documents.json`.
 
 ## 6. Сессии и доступ без регистрации
 
