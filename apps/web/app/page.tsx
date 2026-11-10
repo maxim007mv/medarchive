@@ -1,7 +1,12 @@
+import { Suspense } from "react";
+
+import { HomeScreen } from "@/components/documents/HomeScreen";
+
+// Filters live in the URL (nuqs), which needs a Suspense boundary for prerendering.
 export default function HomePage() {
   return (
-    <main>
-      <h1>Медархив</h1>
-    </main>
+    <Suspense>
+      <HomeScreen />
+    </Suspense>
   );
 }
