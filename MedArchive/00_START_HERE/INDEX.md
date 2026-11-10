@@ -17,7 +17,7 @@
 | `01_common/07-data-model.sql` | DDL PostgreSQL | 22 КБ |
 | `01_common/07-database.md` | БД: ERD, индексы, планы, RLS, шифрование, бэкапы | 28 КБ |
 | `01_common/08-security-privacy.md` | Модель угроз STRIDE, ASVS, API Top 10, 152-ФЗ | 13 КБ |
-| `01_common/09-decisions-ADR.md` | 50 архитектурных решений | 59 КБ |
+| `01_common/09-decisions-ADR.md` | 50 архитектурных решений | 60 КБ |
 | `01_common/10-patterns.md` | Каталог паттернов бэкенда и фронтенда | 7 КБ |
 | `01_common/11-design-rationale.md` | Обоснование экранов и действий | 12 КБ |
 | `01_common/12-telegram-summary.md` | Короткая сводка для Telegram | 1 КБ |
@@ -81,8 +81,8 @@
 | `02_design/source/palette.json` | Исходник сборки макетов и брендбука | 9 КБ |
 | `02_design/source/pdf.py` | Исходник сборки макетов и брендбука | 1014 Б |
 | `02_design/source/shot.py` | Исходник сборки макетов и брендбука | 926 Б |
-| `02_design/tokens.css` | Токены CSS | 4 КБ |
-| `02_design/tokens.json` | Токены | 3 КБ |
+| `02_design/tokens.css` | Токены CSS | 5 КБ |
+| `02_design/tokens.json` | Токены | 4 КБ |
 | `03_frontend/TZ-frontend.md` | ТЗ фронтенда | 17 КБ |
 | `04_backend/TZ-backend.md` | ТЗ бэкенда | 13 КБ |
 | `04_backend/TZ-database.md` | ТЗ БД | 8 КБ |
