@@ -55,6 +55,8 @@
   --shadow-segment: var(--shadow-1), inset 0 -2px 0 var(--c-accent);
   /* Focused field: outer ring of 22% accent (brandbook §6). */
   --shadow-field-focus: 0 0 0 3px color-mix(in srgb, var(--c-focus) 22%, transparent);
+  /* Field with an error: 1px border plus 1px inset makes the 2px danger border without a shift. */
+  --shadow-field-error: inset 0 0 0 1px var(--c-danger);
 
   --font-*: initial;
   --font-sans: var(--font-sans);
