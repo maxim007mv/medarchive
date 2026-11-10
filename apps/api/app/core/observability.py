@@ -10,22 +10,41 @@ import structlog
 SCRUBBED = "[scrubbed]"
 
 
+# Their INFO lines carry full URLs, query strings included.
+_URL_LOGGERS = ("httpx", "httpcore", "botocore", "boto3", "urllib3", "s3transfer")
+
+
 def configure_logging(level: str) -> None:
-    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level, force=True)
+    """One JSON line per event on stdout, for structlog and stdlib loggers alike."""
+    shared: list[structlog.types.Processor] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+    ]
+    structlog.configure(
+        processors=[*shared, structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(
+        structlog.stdlib.ProcessorFormatter(
+            foreign_pre_chain=shared,
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.processors.JSONRenderer(ensure_ascii=False),
+            ],
+        )
+    )
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(level)
+    for name in _URL_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
     # Uvicorn access lines contain the raw query string (`q=` is a search over medical titles);
     # RequestContextMiddleware writes its own line with the route template instead.
     logging.getLogger("uvicorn.access").disabled = True
-    structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso", utc=True),
-            structlog.processors.JSONRenderer(ensure_ascii=False),
-        ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level)),
-        logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
 
 
 def configure_sentry(dsn: str, environment: str) -> None:
