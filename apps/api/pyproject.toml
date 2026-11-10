@@ -10,6 +10,7 @@ dependencies = [
     # boto3, not aioboto3: Tink streaming AEAD works on synchronous file objects, so S3 streams
     # run in a worker thread anyway; aiobotocore also pins botocore to narrow ranges.
     "boto3>=1.35",
+    "cryptography>=44",
     "fastapi>=0.115",
     "httpx>=0.28",
     "prometheus-client>=0.21",
