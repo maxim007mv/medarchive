@@ -1,6 +1,8 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "../../support/fixtures";
+import { sources } from "../../support/manifest";
+import { rows } from "../screens/helpers";
 
 // QA-07, step 6 of the manual checklist automated: rules of docs/texts.md, section 1 and 2, on
 // what the user actually sees. Latin is allowed for file formats and the file-name example.
@@ -49,7 +51,7 @@ test("QA-07 archive list texts follow docs/texts.md", { tag: ["@b5", "@regressio
   await freshArchive.api.addAllSources();
 
   await page.goto("/");
-  await expect(page.getByText("Общий анализ крови").first()).toBeVisible();
+  await expect(rows(page)).toHaveCount(sources.length);
 
   expect(textRuleViolations(await visibleText(page))).toEqual([]);
 });

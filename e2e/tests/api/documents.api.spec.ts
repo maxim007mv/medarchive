@@ -80,10 +80,10 @@ test("TC-024 download sends the Cyrillic name as filename* in UTF-8", { tag: ["@
 
   const response = await request.get(`/api/v1/documents/${created.id}/content?disposition=attachment`);
 
+  // 06-api-contract: the download is named `{date|bez-daty}_{title}.pdf`, Cyrillic in filename*.
   await expectStatus(response, 200);
-  expect(response.headers()["content-disposition"]).toContain(
-    `filename*=UTF-8''${encodeURIComponent(fixture.fileName)}`,
-  );
+  const encoded = /filename\*=UTF-8''([^;]+)/.exec(response.headers()["content-disposition"] ?? "")?.[1];
+  expect(decodeURIComponent(encoded ?? "")).toBe(`bez-daty_${blood.title}.pdf`);
 });
 
 test("TC-042 page_size=2 walks all six documents once, in list order", { tag: ["@b5", "@P1", "@TC-042"] }, async ({ request }) => {

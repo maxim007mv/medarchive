@@ -12,7 +12,7 @@ test("TC-095 a title with markup is shown as text and never executed", { tag: ["
   });
 
   await page.goto("/");
-  const title = page.getByText(PAYLOAD, { exact: true }).first();
+  const title = page.getByText(PAYLOAD, { exact: true }).filter({ visible: true }).first();
   await expect(title).toBeVisible();
   await title.click();
   await expect(page.getByRole("heading", { name: PAYLOAD })).toBeVisible();
