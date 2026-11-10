@@ -1,8 +1,10 @@
-import json, sys, io, contextlib
+import json, io, contextlib
+from pathlib import Path
 with contextlib.redirect_stdout(io.StringIO()):
     import gen
 from gen import I, P, tag, dd, F, typeradio, filebox, modal, table, toolbar, mcard, DOCS
-pal = json.load(open('../palette.json'))
+HERE = Path(__file__).resolve().parent
+pal = json.loads((HERE / 'palette.json').read_text(encoding='utf-8'))
 L, Dk = pal['light'], pal['dark']
 
 def lum(h):
@@ -60,9 +62,14 @@ page('Палитра · тёмная тема', '<p class="lead">Фон <span cl
 rows=pal['rows']
 def ctab(rs):
     return '<table class="t"><tr><th>Тема</th><th>Пара</th><th>Текст</th><th>Фон</th><th>Контраст</th><th>Порог</th><th></th></tr>'+''.join(
-        f'<tr><td>{a}</td><td>{b}</td><td><span class="chipc" style="background:{c};"></span><span class="mono">{c}</span></td><td><span class="chipc" style="background:{d}"></span><span class="mono">{d}</span></td><td class="mono">{e:.2f}:1</td><td class="mono">{f}:1</td><td class="pass">{"AA" if e>=f else "нет"}</td></tr>' for a,b,c,d,e,f in rs)+'</table>'
-h=(len(rows)+1)//2
-page('Проверка контраста', f'<p class="lead">Все {len(rows)} рабочих пар проходят WCAG 2.2 AA: текст 4,5:1, крупный текст и границы элементов управления 3:1 (SC 1.4.3, 1.4.11). Расчёт: <span class="mono">build/contrast.py</span>.</p><div class="two">{ctab(rows[:h])}{ctab(rows[h:])}</div>', '1')
+        f'<tr><td>{a}</td><td>{b}</td><td><span class="chipc" style="background:{c};"></span><span class="mono">{c}</span></td><td><span class="chipc" style="background:{d}"></span><span class="mono">{d}</span></td><td class="mono">{e:.2f}:1</td><td class="mono">{f"{f}:1" if f else "—"}</td><td class="pass">{verdict(e,f)}</td></tr>' for a,b,c,d,e,f in rs)+'</table>'
+def verdict(e,f):
+    if not f: return 'не треб.'
+    return 'AA' if e>=f else 'нет'
+required=[r for r in rows if r[5]]
+for theme in ('светлая','тёмная'):
+    rs=[r for r in rows if r[0]==theme]; h=(len(rs)+1)//2
+    page(f'Проверка контраста · {theme}', f'<p class="lead">Все {len(required)} рабочих пар двух тем проходят WCAG 2.2 AA: текст 4,5:1, границы элементов управления и фокус 3:1 (SC 1.4.3, 1.4.11). Неактивные элементы порога не имеют и показаны справочно. Расчёт: <span class="mono">source/contrast.py</span> из <span class="mono">tokens.json</span>.</p><div class="two">{ctab(rs[:h])}{ctab(rs[h:])}</div>', '1')
 
 page('Цвет · правильно и неправильно', '<div class="pairs">'+
  pair(ok(demo('<div class="row g8"><span class="btn p">Добавить PDF</span><span class="btn s">Экспорт</span></div>'),'Одна главная кнопка чёрная, вторая белая с рамкой.'),
@@ -74,15 +81,15 @@ page('Цвет · правильно и неправильно', '<div class="pa
 
 # ---------- typography
 GL='АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ<br>абвгдеёжзийклмнопрстуфхцчшщъыьэюя<br>ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz<br>0123456789 «» ( ) , . : ; ! ? № % + − = / @ ₽'
-page('Типографика · Medeo', f'''<div class="two"><div><div class="spec">Аа</div><p class="lead">Medeo Sans: открытое семейство студии DNF с латиницей и кириллицей, версия 1.1.0, лицензия SIL OFL 1.1 (S15). Основан на Geist, часть кириллицы и интервалов из Inter. Подключение: <span class="mono">npm i medeo-font</span>, <span class="mono">next/font/local</span>, <span class="mono">font-display: swap</span>.</p>
+page('Типографика · Medeo', f'''<div class="two"><div><div class="spec">Аа</div><p class="lead">Medeo Sans: открытое семейство студии DNF с латиницей и кириллицей, версия 1.0.0 из локального пакета Medeo-v1.0.0 (ADR-043), лицензия SIL OFL 1.1 (S15). Основан на Geist, часть кириллицы и интервалов из Inter. Подключение: вариативные файлы в <span class="mono">apps/web/app/fonts</span>, <span class="mono">next/font/local</span>, <span class="mono">font-display: swap</span>.</p>
 <div class="wts">{"".join(f'<div><span style="font-weight:{w}">Медархив</span><em class="mono">{w}</em></div>' for w in (400,500,600))}</div></div>
-<div><p class="glyphs">{GL}</p><p class="glyphs mono" style="font-family:'Geist Mono'">08.04.2026 · 21.05.2026 · 79 КБ<br>7K3M-Q9TB-2XRA-HC4D-P8WN-6YFE</p><p class="cap">Medeo Mono: даты, размеры, ключ доступа. Табличные цифры: столбец дат стоит ровно.</p></div></div>''', '2')
+<div><p class="glyphs">{GL}</p><p class="glyphs mono">08.04.2026 · 21.05.2026 · 79 КБ<br>7K3M-Q9TB-2XRA-HC4D-P8WN-6YFE</p><p class="cap">Medeo Mono: даты, размеры, ключ доступа. Табличные цифры: столбец дат стоит ровно.</p></div></div>''', '2')
 
 SC=[('display',44,52,600,'-0.03em','Онбординг'),('h1',28,36,600,'-0.02em','Документы'),('h2',20,28,600,'-0.01em','Новый документ'),('h3',16,24,600,'0','Заметка'),('bodyL',17,26,400,'0','Ваши медицинские документы в одном месте'),('body',14,20,400,'0','PDF-файл и заметка хранятся в вашем архиве'),('label',13,18,500,'0','Дата документа'),('caption',12,16,400,'0','Дата загрузки запишется автоматически')]
 page('Типографика · шкала', '<table class="t ts"><tr><th>Стиль</th><th>Размер / строка</th><th>Вес</th><th>Трекинг</th><th>Образец</th></tr>'+''.join(
  f'<tr><td class="mono">{n}</td><td class="mono">{s} / {l}</td><td class="mono">{w}</td><td class="mono">{t}</td><td><span style="font-size:{s}px;line-height:{l}px;font-weight:{w};letter-spacing:{t}">{x}</span></td></tr>' for n,s,l,w,t,x in SC)+
  '<tr><td class="mono">mono</td><td class="mono">13 / 20</td><td class="mono">400</td><td class="mono">0</td><td><span class="mono" style="font-size:13px">08.04.2026 · 79 КБ</span></td></tr></table>'+
- '<div class="pairs" style="margin-top:16px">'+pair(ok(demo('<div class="col" style="font-family:\'Geist Mono\';font-size:14px"><span>08.04.2026</span><span>21.05.2026</span><span>10.11.2026</span></div>'),'Даты моноширинным: цифры стоят в колонку.'),no(demo('<div class="col" style="font-size:14px;font-weight:300"><span>08.04.2026</span><span>21.05.2026</span><span>10.11.2026</span></div>'),'Тонкий 300 и пропорциональные цифры: текст теряет контраст, колонка прыгает.'))+'</div>', '2')
+ '<div class="pairs" style="margin-top:16px">'+pair(ok(demo('<div class="col mono" style="font-size:14px"><span>08.04.2026</span><span>21.05.2026</span><span>10.11.2026</span></div>'),'Даты моноширинным: цифры стоят в колонку.'),no(demo('<div class="col" style="font-size:14px;font-weight:300"><span>08.04.2026</span><span>21.05.2026</span><span>10.11.2026</span></div>'),'Тонкий 300 и пропорциональные цифры: текст теряет контраст, колонка прыгает.'))+'</div>', '2')
 
 # ---------- spacing
 grid=''.join(f'<div class="sp"><i style="width:{v}px;height:{v}px"></i><span class="mono">{v}</span></div>' for v in (2,4,6,8,10,12,16,24,32,48,64))
@@ -205,7 +212,7 @@ page('Доступность: чек-лист дизайнера', '<div class="
 def shots(prefix, items, per, mobile=False):
     for i in range(0,len(items),per):
         chunk=items[i:i+per]
-        cells=''.join(f'<figure class="{"mfig" if mobile else "dfig"}"><img src="../shots/{prefix}-{j:02d}.png"><figcaption><b>{n}</b>{(" · "+d) if d else ""}</figcaption></figure>' for j,n,d in chunk)
+        cells=''.join(f'<figure class="{"mfig" if mobile else "dfig"}"><img src="../screens/{prefix}-{j:02d}.png"><figcaption><b>{n}</b>{(" · "+d) if d else ""}</figcaption></figure>' for j,n,d in chunk)
         title={'desktop-light':'Экраны · десктоп · светлая','desktop-dark':'Экраны · десктоп · тёмная','mobile-light':'Экраны · мобильный · светлая','mobile-dark':'Экраны · мобильный · тёмная'}[prefix]
         page(title+(f' · {i//per+1}' if len(items)>per else ''), f'<div class="{"mgrid" if mobile else "dgrid"}">{cells}</div>', 'Э', cls='scr')
 DL=[(i+1,n,'') for i,(n,f,d) in enumerate(gen.D)]
@@ -236,5 +243,5 @@ for i,(t,s,b,c) in enumerate(PAGES):
     ftr = '' if i==0 else f'<footer><span>Медархив · Брендбук 1.0</span><span class="mono">{i+1} / {len(PAGES)}</span></footer>'
     html.append(f'<section class="pg {c}">{hdr}<div class="pb">{b}</div>{ftr}</section>')
 html.append('</body></html>')
-open('brandbook.html','w').write('\n'.join(html))
+(HERE / 'brandbook.html').write_text('\n'.join(html), encoding='utf-8')
 print(len(PAGES),'pages')

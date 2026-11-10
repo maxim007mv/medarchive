@@ -1,4 +1,4 @@
-import json
+from pathlib import Path
 P={
 'search':'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>','x':'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>','plus':'<path d="M5 12h14"/><path d="M12 5v14"/>',
 'upload':'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
@@ -72,13 +72,19 @@ def typeradio(on=0):
 def filebox(name,sz,state='ok',pct=100):
     st={'ok':f'<span class="save ok">{I("check","ic ic16")}Готов к сохранению</span>','up':f'<div class="bar" style="width:100%"><i style="width:{pct}%"></i></div>','err':f'<span class="err" style="color:var(--danger);font-size:12px">Это не PDF</span>'}[state]
     return f'<div class="filebox"><span class="fi">{I("file")}</span><div class="col grow g4" style="min-width:0"><span style="font-weight:500">{name}</span><span class="faint" style="font-size:12px">{sz}</span>{st if state!="ok" else ""}</div>{st if state=="ok" else ""}<span class="ib sm">{I("x","ic ic16")}</span></div>'
+CONSENT_TEXT='Я согласен на хранение и обработку моих медицинских документов по <u>политике обработки данных</u>'
+CONSENT_REASON='Отметьте согласие, чтобы добавить документ'
+def consent():
+    return f'<label class="row g8" style="align-items:flex-start;text-align:left;max-width:420px"><span class="cb" style="margin-top:1px"></span><span>{CONSENT_TEXT}</span></label>'
+def consent_links():
+    return '<div class="row g16" style="font-size:13px;flex-wrap:wrap;justify-content:center"><u style="color:var(--accent)">Политика обработки данных</u><span class="muted">Уже есть архив? <u style="color:var(--accent)">Открыть по ключу</u></span></div>'
 # ---------- desktop screens
 def D_onboarding(t):
     steps=''.join(f'<div class="step"><span class="n">{i+1}</span><div class="col"><b style="font-weight:600">{a}</b><span class="muted">{b}</span></div></div>' for i,(a,b) in enumerate([('Добавьте PDF','Перетащите файл или выберите его на компьютере. Подойдут анализы и заключения врачей.'),('Подпишите документ','Название, тип и дата документа. Дату загрузки мы запишем сами.'),('Находите и выгружайте','Поиск по названию, фильтр по датам, заметки и выгрузка архива одним ZIP.')]))
     body=f'''{header(t,actions=False)}<div style="display:grid;grid-template-columns:1fr 560px;gap:64px;padding:72px 120px;align-items:center">
-<div class="col g24"><span class="tag ot" style="align-self:flex-start">Шаг 1 из 1 · первый запуск</span><h1 style="font:600 44px/52px Geist;letter-spacing:-.03em">Все медицинские документы в одном месте</h1><p class="muted" style="font-size:17px;line-height:26px;max-width:520px">Анализы и заключения больше не потеряются в почте и мессенджерах. Добавьте PDF, подпишите его и находите за секунды.</p><div class="steps">{steps}</div>
+<div class="col g24"><span class="tag ot" style="align-self:flex-start">Шаг 1 из 1 · первый запуск</span><h1 style="font-size:44px;line-height:52px;font-weight:600;letter-spacing:-.03em">Все медицинские документы в одном месте</h1><p class="muted" style="font-size:17px;line-height:26px;max-width:520px">Анализы и заключения больше не потеряются в почте и мессенджерах. Добавьте PDF, подпишите его и находите за секунды.</p><div class="steps">{steps}</div>
 <div class="alert i" style="max-width:560px">{I("shield")}<div><b>Где хранятся документы</b>Файлы и заметки хранятся на сервере сервиса и привязаны к этому браузеру. Чтобы открыть архив на другом устройстве, сохраните ключ доступа в настройках.</div></div></div>
-<div class="drop" style="padding:56px 32px;gap:16px"><span class="fi" style="width:64px;height:64px;border-radius:18px;background:var(--accentSoft);color:var(--accent)">{I("upload","ic ic24")}</span><h2 class="h2">Добавьте первый документ</h2><p class="muted">Перетащите PDF сюда или выберите файл</p><button class="btn p lg">{I("plus")}Выбрать PDF</button><span class="faint" style="font-size:12px">Только PDF, до 20 МБ. Распознавать текст не нужно.</span></div></div>'''
+<div class="drop" style="padding:56px 32px;gap:16px"><span class="fi" style="width:64px;height:64px;border-radius:18px;background:var(--accentSoft);color:var(--accent)">{I("upload","ic ic24")}</span><h2 class="h2">Добавьте первый документ</h2><p class="muted">Перетащите PDF сюда или выберите файл</p>{consent()}<div class="col g8" style="align-items:center"><button class="btn dis lg">{I("plus")}Выбрать первый PDF</button><span class="faint" style="font-size:12px">{CONSENT_REASON}</span></div><span class="faint" style="font-size:12px">Только PDF, до 20 МБ. Распознавать текст не нужно.</span>{consent_links()}</div></div>'''
     return body
 def D_upload(t,state='filled'):
     lst=listpage(t)
@@ -146,7 +152,7 @@ def M_list(t,idx=ORDER,top=''):
     return f'{header(t,True)}<div style="padding:16px;display:flex;flex-direction:column;gap:12px"><div class="row"><h1 class="h2 grow">Документы</h1><span class="faint">{len(idx)}</span></div><div class="row g8"><div class="inp grow">{I("search")}<span class="ph">Поиск по названию</span></div><div class="ib s">{I("filter")}</div></div>{top}{cards}</div><div class="sticky"><button class="btn p lg" style="width:100%">{I("plus")}Добавить PDF</button></div>'
 def M_onb(t):
     steps=''.join(f'<div class="step"><span class="n">{i+1}</span><div class="col"><b style="font-weight:600">{a}</b><span class="muted" style="font-size:13px">{b}</span></div></div>' for i,(a,b) in enumerate([('Добавьте PDF','Анализ или заключение врача'),('Подпишите','Название, тип, дата документа'),('Находите и выгружайте','Поиск, фильтр по датам, ZIP')]))
-    return f'{header(t,True)}<div style="padding:24px 16px;display:flex;flex-direction:column;gap:20px"><h1 style="font:600 30px/36px Geist;letter-spacing:-.02em">Все медицинские документы в одном месте</h1><p class="muted">Добавьте PDF, подпишите его и находите за секунды.</p><div class="steps">{steps}</div><div class="alert i">{I("shield")}<div>Файлы хранятся на сервере и привязаны к этому браузеру. Ключ доступа откроет архив на другом устройстве.</div></div></div><div class="sticky"><button class="btn p lg" style="width:100%">{I("plus")}Выбрать первый PDF</button></div>'
+    return f'{header(t,True)}<div style="padding:24px 16px;display:flex;flex-direction:column;gap:20px"><h1 style="font-size:30px;line-height:36px;font-weight:600;letter-spacing:-.02em">Все медицинские документы в одном месте</h1><p class="muted">Добавьте PDF, подпишите его и находите за секунды.</p><div class="steps">{steps}</div><div class="alert i">{I("shield")}<div>Файлы хранятся на сервере и привязаны к этому браузеру. Ключ доступа откроет архив на другом устройстве.</div></div>{consent()}{consent_links()}</div><div class="sticky"><div class="col g8" style="align-items:center"><button class="btn dis lg" style="width:100%">{I("plus")}Выбрать первый PDF</button><span class="faint" style="font-size:12px">{CONSENT_REASON}</span></div></div>'
 def M_filter(t):
     sh=f'<div class="sheet"><div class="grab"></div><div style="padding:16px;display:flex;flex-direction:column;gap:16px"><div class="row"><h2 class="h2 grow">Фильтр</h2><span class="ib sm">{I("x")}</span></div>'+F('Искать по','<div class="seg" style="width:100%"><span class="on" style="flex:1;justify-content:center">Дата документа</span><span style="flex:1;justify-content:center">Дата загрузки</span></div>')+'<div class="row g8">'+F('С',f'<div class="inp">{I("cal","ic ic16")}<span class="mono">01.04.2026</span></div>')+F('По',f'<div class="inp">{I("cal","ic ic16")}<span class="mono">30.04.2026</span></div>')+'</div>'+F('Тип','<div class="seg" style="width:100%"><span class="on" style="flex:1;justify-content:center">Все</span><span style="flex:1;justify-content:center">Анализ</span><span style="flex:1;justify-content:center">Заключ.</span></div>')+'<div class="row g8" style="padding-bottom:50px"><button class="btn s lg grow">Сбросить</button><button class="btn p lg grow">Показать 3</button></div></div></div>'
     return f'<div style="filter:none">{M_list(t)}</div><div class="scrim" style="align-items:flex-end"></div>{sh}'
@@ -191,10 +197,13 @@ boards={
  'mobile-light':[frame('m','light',f('light'),n,d) for n,f,d in M],
  'mobile-dark':[frame('m','dark',f('dark'),n+' · тёмная',d) for n,f,d in M if n[:3] in ('M02','M04','M06','M07')],
 }
+HERE=Path(__file__).resolve().parent
+def write(name,frames):
+    (HERE/f'{name}.html').write_text(page(name,frames),encoding='utf-8')
 for k,v in boards.items():
-    open(f'{k}.html','w').write(page(k,v))
+    write(k,v)
 # single-screen pages for review
 print({k:len(v) for k,v in boards.items()})
 _dl=boards['desktop-light']
-open('desktop-light-a.html','w').write(page('desktop-light-a',_dl[:8]))
-open('desktop-light-b.html','w').write(page('desktop-light-b',_dl[8:]))
+write('desktop-light-a',_dl[:8])
+write('desktop-light-b',_dl[8:])
