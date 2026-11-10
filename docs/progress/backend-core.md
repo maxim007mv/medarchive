@@ -32,7 +32,9 @@
 | Курсор | `request.app.state.page_tokens: PageTokenCodec`; `codec.encode(cursor: Mapping[str, str | int], fingerprint: bytes) -> str`, `codec.decode(token, fingerprint) -> dict` (любой чужой, испорченный или старый токен → `ProblemError(invalid_page_token)`); `from app.core.page_token import list_fingerprint` |
 | Идемпотентность | `from app.core.idempotency import Operation, StoredResponse, require_idempotency_key, run_idempotent`; `key: Annotated[str, Depends(require_idempotency_key)]` (400 без заголовка); `stored = await run_idempotent(db, session, keys, operation=Operation.DOCUMENTS_CREATE, key=key, payload=body_model, execute=create)`, где `create() -> StoredResponse(status=201, body={...}, headers={"Location": ..., "ETag": ...}, resource_id=id)` открывает свои транзакции; ответ `stored.to_response()` (повтор с `Idempotent-Replayed: true`). Другое тело = 422 `idempotency_key_reused`, параллельный повтор = 409 + `Retry-After: 1`, ошибка внутри `execute` снимает захват ключа |
 | Лимит | `from app.core.ratelimit import rate_limit, UPLOADS_CREATE, DOCUMENTS_CREATE, DOCUMENTS_LIST, DOCUMENTS_GET, DOCUMENTS_CONTENT, DOCUMENTS_UPDATE, DOCUMENTS_DELETE, EXPORTS_CREATE, EXPORTS_CONTENT, SUGGESTIONS_CREATE`; в декораторе маршрута `dependencies=[Depends(rate_limit(UPLOADS_CREATE))]` (тогда заголовки есть и на 401) |
-| Метрики | `from app.core.metrics import UPLOAD_BYTES, S3_ERRORS`; `UPLOAD_BYTES.observe(size)`, `S3_ERRORS.labels("put").inc()` |
+| Метрики | `from app.core.metrics import UPLOAD_BYTES, S3_ERRORS`; `UPLOAD_BYTES.observe(size)`, `S3_ERRORS.labels("put").inc()`; `kek_errors_total{operation="load_kek" | "open_workspace_keys"}` считает ядро само |
+| Адрес клиента | `from app.core.client import client_ip` (`client_ip(request) -> IPv4Address | IPv6Address | None`): за доверенным прокси ближайший недоверенный адрес `X-Forwarded-For` |
+| Новый ключ доступа | `from app.modules.auth.service import issue_new_access_key` (внутри `workspace_tx`, повтор при занятом `lookup_id`) |
 | Хранилище | `request.app.state.storage` (`ObjectStorage` из `app/storage/s3.py`, создаётся в lifespan) |
 | UUIDv7 | `from app.core.ids import new_id` |
 | Аудит | `from app.modules.auth.repository import add_audit` (обычный INSERT без RETURNING: у `ma_app` нет SELECT на журнал) |
@@ -48,15 +50,28 @@
 6. `If-Match` и `X-CSRF-Token` читаются из заголовков напрямую, не объявляются параметрами: иначе FastAPI добавляет 422 в схему операции, а в контракте у `workspace.delete` и `sessions.delete` его нет.
 7. Отпечаток согласия одинаков для всех, кто принял одну версию, поэтому он константа `EVIDENCE_SHA256`; unit-тест пересчитывает его из `docs/texts.md` и `docs/policy.md` и упадёт при правке текста или политики.
 8. В ruff разрешены кириллические «двойники» латиницы (`allowed-confusables`): тексты интерфейса русские.
+9. Адрес клиента для лимитов по IP и префикса IP в аудите: TCP-адрес, а если он входит в `TRUSTED_PROXIES`, то ближайший справа адрес `X-Forwarded-For`, который сам не доверенный (левые адреса клиент может подставить). По умолчанию доверенных прокси нет.
+10. `RATE_LIMITS_ENABLED=false` (по умолчанию `true`) оставляет заголовки `RateLimit` с полной квотой, но ничего не тратит: для функциональных E2E и k6 гейта; TC-082 и TC-098 идут с включёнными лимитами.
+11. `lookup_id` ключа случайный (6 символов), поэтому вставка идёт в SAVEPOINT: при `23505` выдаётся новый ключ, до трёх попыток; удалённый архив даёт 401.
 
 ## Запросы к агенту БД
 
 1. **Часовой пояс архива.** `WorkspaceCreate.timezone` проверяется (IANA), но хранить его негде: в `workspaces` нет колонки, у `app.create_workspace` нет параметра. Прошу `workspaces.timezone text NOT NULL DEFAULT 'Europe/Moscow' CHECK (char_length(timezone) BETWEEN 1 AND 64)` и `p_timezone text` в `app.create_workspace`. До этого `GET /api/v1/session` не отдаёт `timezone` (поле необязательное в схеме), а список берёт зону из параметра `tz`.
 
+## Дефекты гейта (`docs/progress/blocks.md`)
+
+| ID | Что сделано | Коммит |
+|---|---|---|
+| D-005 | Лимиты по IP считают адрес пользователя за доверенным прокси (`TRUSTED_PROXIES`), подделанные левые адреса `X-Forwarded-For` не учитываются; тест с двумя адресами за одним прокси | `fa14f11` |
+| D-006 | Параметр `RATE_LIMITS_ENABLED` | `fa14f11` |
+| D-007 | Счётчик `kek_errors_total{operation}` | `098533d` |
+| D-008 | Наблюдался на `62fe880`, до коммита фабрики: `82e87c4` подключает `auth`, `workspace`, `/readyz`, `/metrics`; роутеры `uploads`, `documents`, `exports` подключу после коммита агента документов | `82e87c4` |
+
 ## Запросы к агенту DevOps (compose и секреты)
 
-1. API требует `CSRF_SECRET` и `PAGE_TOKEN_KEY` (не короче 32 символов; `PAGE_TOKEN_KEY_PREVIOUS` по желанию на время ротации), необязательные `SENTRY_DSN`, `LOG_LEVEL`. Нужно: пустые строки `CSRF_SECRET=` и `PAGE_TOKEN_KEY=` в `.env.example` (`make secrets` их заполнит), передача в `environment` сервиса `api` в `docker-compose.yml`, а для уже созданного `.env` дописывание недостающих ключей в `infra/secrets/generate.py` (существующие значения не трогать). Без них api не стартует: настройки падают при запуске.
-2. Uvicorn за прокси Next.js: чтобы лимит 5 попыток входа считался по IP пользователя, а не контейнера `web`, нужны `--proxy-headers --forwarded-allow-ips=<адрес web>` в `CMD` образа api (иначе все пользователи делят один лимит).
+1. Для D-005 в compose нужен `TRUSTED_PROXIES` сервиса `api` = подсеть сети compose, из которой ходит `web` (JSON-список, например `'["172.16.0.0/12"]'`); Next.js `rewrites` передаёт `X-Forwarded-For`. Для гейтов без лимитов: `RATE_LIMITS_ENABLED=false`.
+2. API требует `CSRF_SECRET` и `PAGE_TOKEN_KEY` (не короче 32 символов; `PAGE_TOKEN_KEY_PREVIOUS` по желанию на время ротации), необязательные `SENTRY_DSN`, `LOG_LEVEL`. Нужно: пустые строки `CSRF_SECRET=` и `PAGE_TOKEN_KEY=` в `.env.example` (`make secrets` их заполнит), передача в `environment` сервиса `api` в `docker-compose.yml`, а для уже созданного `.env` дописывание недостающих ключей в `infra/secrets/generate.py` (существующие значения не трогать). Без них api не стартует: настройки падают при запуске.
+3. Флаги `--proxy-headers` у uvicorn больше не нужны: адрес клиента берёт само приложение (п. 1).
 
 ## Вопросы владельцу
 
@@ -68,9 +83,9 @@
 |---|---|
 | `uv run ruff format` и `uv run ruff check` по файлам ядра, auth, workspace и тестам | All checks passed |
 | `uv run mypy app/core app/main.py app/modules/auth app/modules/workspace tests/unit/... tests/integration/...` (strict) | no issues in 43 source files |
-| `uv run pytest tests/unit tests/test_health.py` (вместе с unit-тестами агента документов) | 216 passed |
+| `uv run pytest tests/unit tests/test_health.py` (вместе с unit-тестами агента документов) | 226 passed |
 | `CONTRACT_BLOCK=3 uv run pytest tests/contract/test_openapi_diff.py` | 19 passed: операции, пути, методы и статусы ядра совпадают с `openapi.yaml` |
-| `TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock uv run pytest tests/integration/test_auth.py tests/integration/test_workspace.py tests/integration/test_errors_api.py tests/integration/test_security_headers.py tests/integration/test_ratelimit_api.py` (PostgreSQL 17 с миграциями 0001+0002, MinIO, Redis 7) | 51 passed; общий прогон unit + integration ядра 267 passed |
+| `TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock uv run pytest tests/integration/test_auth.py tests/integration/test_workspace.py tests/integration/test_errors_api.py tests/integration/test_security_headers.py tests/integration/test_ratelimit_api.py` (PostgreSQL 17 с миграциями 0001+0002, MinIO, Redis 7) | 55 passed; общий прогон unit + integration ядра 281 passed |
 
 | Schemathesis 4.33.1 против живого API (uvicorn на 127.0.0.1:8811, PostgreSQL 17 + MinIO + Redis в Docker на свободных портах), `CONTRACT_BASE_URL=... SCHEMATHESIS_HOOKS=tests.contract.hooks uv run schemathesis run ../../openapi.yaml --url http://127.0.0.1:8811 --checks all --max-examples 10 --seed 20261110 --workers 1 --include-operation-id ...` | Операции `workspaces.create`, `session.get`, `sessions.create`, `workspace.get`, `workspace.rotateKey`, `documentTypes.list`, `health.live`, `health.ready`: 221 из 221 прошли. `sessions.delete` и `workspace.delete` отдельным прогоном: 35 случаев, 2 ожидаемых замечания (ниже) |
 
