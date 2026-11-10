@@ -46,6 +46,10 @@ def test_title_and_note_are_trimmed_and_blank_note_is_null() -> None:
         pytest.param(
             {"document_date": "1899-12-31"}, ("document_date", "date_invalid"), id="before-1900"
         ),
+        pytest.param({"document_date": 0}, ("document_date", "date_invalid"), id="unix-time"),
+        pytest.param(
+            {"document_date": "20260408"}, ("document_date", "date_invalid"), id="basic-format"
+        ),
         pytest.param({"type": "xray"}, ("type", "type_unknown"), id="unknown-type"),
         pytest.param({"version": 2}, ("version", "extra_forbidden"), id="TC-097-extra-field"),
     ],

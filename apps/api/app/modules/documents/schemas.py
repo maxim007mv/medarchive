@@ -4,6 +4,7 @@ Validators raise catalog codes (`title_required`, `date_invalid`, ...) as pydant
 so `errors[].code` in the 422 answer names the exact rule.
 """
 
+import re
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -11,6 +12,7 @@ from uuid import UUID
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     ValidationError,
@@ -25,6 +27,7 @@ MAX_TITLE_CHARS = 200
 MAX_NOTE_CHARS = 2000
 # documents CHECK (document_date >= DATE '1900-01-01').
 MIN_DOCUMENT_DATE = date(1900, 1, 1)
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 TypeCode = Literal["analysis", "conclusion", "other"]
 
@@ -49,10 +52,20 @@ def _note(value: str | None) -> str | None:
     return note or None
 
 
+def iso_date_only(value: Any) -> Any:
+    """`YYYY-MM-DD` text or a date: pydantic alone would also take 0 or "0" as a Unix time."""
+    if value is None or isinstance(value, date):
+        return value
+    if not isinstance(value, str) or not ISO_DATE.fullmatch(value):
+        raise ValueError("expected YYYY-MM-DD")
+    return value
+
+
 def _document_date(value: Any, handler: ValidatorFunctionWrapHandler) -> date | None:
     try:
-        parsed: date | None = handler(value)
-    except ValidationError:
+        parsed: date | None = handler(iso_date_only(value))
+    # pydantic's ValidationError is a ValueError too.
+    except ValueError:
         raise _catalog_error("date_invalid") from None
     if parsed is not None and parsed < MIN_DOCUMENT_DATE:
         raise _catalog_error("date_invalid")
@@ -76,6 +89,8 @@ Note = Annotated[
     str | None, AfterValidator(_note), Field(json_schema_extra={"maxLength": MAX_NOTE_CHARS})
 ]
 DocumentDate = Annotated[date | None, WrapValidator(_document_date)]
+# Query and filter dates: a wrong format is plain validation_error.
+IsoDate = Annotated[date | None, BeforeValidator(iso_date_only)]
 DocumentType = Annotated[TypeCode, WrapValidator(_type_code)]
 
 
