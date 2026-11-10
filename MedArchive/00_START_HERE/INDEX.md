@@ -27,11 +27,11 @@
 | `01_common/openapi.yaml` | OpenAPI 3.1, машиночитаемый контракт | 151 КБ |
 | `01_common/reference/task.html` | Страница задания | 10 КБ |
 | `01_common/reference/task.md` | Текст задания | 7 КБ |
-| `02_design/TZ-design.md` | ТЗ дизайна | 4 КБ |
+| `02_design/TZ-design.md` | ТЗ дизайна | 5 КБ |
 | `02_design/brandbook.md` | Брендбук текстом | 43 КБ |
-| `02_design/brandbook.pdf` | Брендбук PDF, 32 страницы | 4748 КБ |
-| `02_design/screens.md` | Каталог снимков экранов | 3 КБ |
-| `02_design/screens/desktop-dark-01.png` | Снимок экрана | 120 КБ |
+| `02_design/brandbook.pdf` | Брендбук PDF, 33 страницы | 4761 КБ |
+| `02_design/screens.md` | Каталог снимков экранов | 5 КБ |
+| `02_design/screens/desktop-dark-01.png` | Снимок экрана | 125 КБ |
 | `02_design/screens/desktop-dark-02.png` | Снимок экрана | 111 КБ |
 | `02_design/screens/desktop-dark-03.png` | Снимок экрана | 100 КБ |
 | `02_design/screens/desktop-dark-04.png` | Снимок экрана | 79 КБ |
@@ -40,7 +40,7 @@
 | `02_design/screens/desktop-dark-07.png` | Снимок экрана | 97 КБ |
 | `02_design/screens/desktop-dark-08.png` | Снимок экрана | 82 КБ |
 | `02_design/screens/desktop-dark-09.png` | Снимок экрана | 104 КБ |
-| `02_design/screens/desktop-light-01.png` | Снимок экрана | 122 КБ |
+| `02_design/screens/desktop-light-01.png` | Снимок экрана | 127 КБ |
 | `02_design/screens/desktop-light-02.png` | Снимок экрана | 121 КБ |
 | `02_design/screens/desktop-light-03.png` | Снимок экрана | 117 КБ |
 | `02_design/screens/desktop-light-04.png` | Снимок экрана | 124 КБ |
@@ -60,7 +60,7 @@
 | `02_design/screens/mobile-dark-02.png` | Снимок экрана | 38 КБ |
 | `02_design/screens/mobile-dark-03.png` | Снимок экрана | 47 КБ |
 | `02_design/screens/mobile-dark-04.png` | Снимок экрана | 44 КБ |
-| `02_design/screens/mobile-light-01.png` | Снимок экрана | 60 КБ |
+| `02_design/screens/mobile-light-01.png` | Снимок экрана | 63 КБ |
 | `02_design/screens/mobile-light-02.png` | Снимок экрана | 50 КБ |
 | `02_design/screens/mobile-light-03.png` | Снимок экрана | 41 КБ |
 | `02_design/screens/mobile-light-04.png` | Снимок экрана | 39 КБ |
