@@ -59,7 +59,10 @@ export function DocumentCards({
               {item.has_note && ` ${texts["list.card.hasNote"]}`}
             </p>
           </div>
-          <RowMenu onDelete={() => onDelete(item)} disabledReason={deleteDisabledReason} />
+          <RowMenu
+            onDelete={(opener) => onDelete(item, opener)}
+            disabledReason={deleteDisabledReason}
+          />
         </li>
       ))}
     </ul>

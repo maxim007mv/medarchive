@@ -112,7 +112,8 @@ function DocumentView({
 }) {
   const { document } = current;
   const [editing, setEditing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  // The element that asked to delete; `undefined` while the dialog is closed.
+  const [deleteOpener, setDeleteOpener] = useState<HTMLElement | null | undefined>(undefined);
   const offlineReason = useOfflineReason();
   const pages = document.file.page_count ?? 1;
 
@@ -129,7 +130,7 @@ function DocumentView({
           <div className="ml-auto lg:hidden">
             <RowMenu
               label={texts["doc.more"]}
-              onDelete={() => setDeleting(true)}
+              onDelete={setDeleteOpener}
               disabledReason={offlineReason}
             />
           </div>
@@ -206,7 +207,7 @@ function DocumentView({
             variant="dangerText"
             size="sm"
             icon={Trash2}
-            onClick={() => setDeleting(true)}
+            onClick={(event) => setDeleteOpener(event.currentTarget)}
             disabled={Boolean(offlineReason)}
             disabledReason={offlineReason}
           >
@@ -215,11 +216,12 @@ function DocumentView({
         </div>
       </aside>
 
-      {deleting && (
+      {deleteOpener !== undefined && (
         <DeleteDialog
           target={document}
           getEtag={async () => current.etag}
-          onClose={() => setDeleting(false)}
+          returnFocusTo={deleteOpener}
+          onClose={() => setDeleteOpener(undefined)}
           onDeleted={onDeleted}
         />
       )}

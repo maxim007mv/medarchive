@@ -2,29 +2,37 @@
 
 import * as Popover from "@radix-ui/react-popover";
 import { Ellipsis, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { IconButton } from "@/components/ui/icon-button";
 import { texts } from "@/lib/texts";
 
 /**
  * «Ещё» of a row or card (D06, M02): the only item is «Удалить», hidden one step deeper on purpose
- * (11-design-rationale, «Удалить»). Closing returns focus to the trigger, so the delete dialog
- * hands focus back to it after Esc (TC-056).
+ * (11-design-rationale, «Удалить»).
  */
 export function RowMenu({
   onDelete,
   disabledReason,
   label = texts["list.row.more"],
 }: {
-  onDelete: () => void;
+  /** Gets the element that opened the menu: the delete dialog returns focus to it (TC-056). */
+  onDelete: (opener: HTMLElement | null) => void;
   disabledReason?: string;
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // The element that opened the menu: the trigger, as clicking or Enter focuses it.
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  function changeOpen(next: boolean) {
+    if (next && document.activeElement instanceof HTMLElement)
+      openerRef.current = document.activeElement;
+    setOpen(next);
+  }
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={changeOpen}>
       <Popover.Trigger asChild>
         <IconButton icon={Ellipsis} size="sm" aria-label={label} aria-haspopup="menu" />
       </Popover.Trigger>
@@ -43,7 +51,7 @@ export function RowMenu({
             onClick={() => {
               if (disabledReason) return;
               setOpen(false);
-              onDelete();
+              onDelete(openerRef.current);
             }}
             className="h-control-sm text-body text-danger hover:bg-danger-bg focus-visible:bg-danger-bg aria-disabled:text-disabled-text flex items-center gap-2 rounded-md px-2.5 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-transparent"
           >

@@ -20,7 +20,8 @@ export type ListProps = {
   timeZone: string;
   selected: ReadonlySet<string>;
   onToggle: (id: string, checked: boolean) => void;
-  onDelete: (item: DocumentItem) => void;
+  /** `opener` is the menu trigger, focused again when the dialog is dismissed. */
+  onDelete: (item: DocumentItem, opener: HTMLElement | null) => void;
   /** Row added just now: lit for 1,2 s where it stands, the list does not move (FE-13). */
   highlightId: string | null;
   deleteDisabledReason?: string;
@@ -188,7 +189,10 @@ export function DocumentTable({
                   >
                     <Eye size={16} strokeWidth={1.75} aria-hidden />
                   </Link>
-                  <RowMenu onDelete={() => onDelete(item)} disabledReason={deleteDisabledReason} />
+                  <RowMenu
+                    onDelete={(opener) => onDelete(item, opener)}
+                    disabledReason={deleteDisabledReason}
+                  />
                 </div>
               </td>
             </tr>

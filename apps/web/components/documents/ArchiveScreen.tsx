@@ -70,7 +70,10 @@ export function ArchiveScreen({ session, initialFiles, issuedKey, onKeyShown }: 
   );
   const [keyToShow, setKeyToShow] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<DocumentItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    item: DocumentItem;
+    opener: HTMLElement | null;
+  } | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [highlightId, setHighlightId] = useState<string | null>(null);
   // Stable between renders: ExportDialog asks the server for a new composition when it changes.
@@ -128,7 +131,7 @@ export function ArchiveScreen({ session, initialFiles, issuedKey, onKeyShown }: 
     timeZone,
     selected,
     onToggle: toggle,
-    onDelete: setDeleteTarget,
+    onDelete: (item: DocumentItem, opener: HTMLElement | null) => setDeleteTarget({ item, opener }),
     highlightId,
     deleteDisabledReason: offlineReason,
   };
@@ -240,11 +243,12 @@ export function ArchiveScreen({ session, initialFiles, issuedKey, onKeyShown }: 
       )}
       {deleteTarget && (
         <DeleteDialog
-          target={deleteTarget satisfies DeleteTarget}
-          getEtag={() => fetchDocumentEtag(deleteTarget.id)}
+          target={deleteTarget.item satisfies DeleteTarget}
+          getEtag={() => fetchDocumentEtag(deleteTarget.item.id)}
+          returnFocusTo={deleteTarget.opener}
           onClose={() => setDeleteTarget(null)}
           onDeleted={() => {
-            toggle(deleteTarget.id, false);
+            toggle(deleteTarget.item.id, false);
             setDeleteTarget(null);
           }}
         />

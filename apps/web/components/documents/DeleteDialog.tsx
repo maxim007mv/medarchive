@@ -23,16 +23,25 @@ export type DeleteTarget = { id: string; title: string; document_date: string | 
 export function DeleteDialog({
   target,
   getEtag,
+  returnFocusTo,
   onClose,
   onDeleted,
 }: {
   target: DeleteTarget;
   /** `If-Match` of the document: from the open card, or loaded for a list row. */
   getEtag: () => Promise<string>;
+  /** Focused again after Esc or «Отмена» (TC-056). */
+  returnFocusTo: HTMLElement | null;
   onClose: () => void;
   onDeleted: () => void;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  function close() {
+    onClose();
+    // Radix returns focus only to its own Dialog.Trigger; this dialog is opened by a row menu or a
+    // panel button. Its focus scope settles on the next task, so the hand-back waits for it.
+    setTimeout(() => returnFocusTo?.focus(), 0);
+  }
   const showToast = useToast();
   const queryClient = useQueryClient();
   const deletion = useDeleteDocument();
@@ -55,7 +64,7 @@ export function DeleteDialog({
   return (
     <Dialog
       open
-      onOpenChange={(open) => !open && onClose()}
+      onOpenChange={(open) => !open && close()}
       width="confirm"
       initialFocus={cancelRef}
       title={texts["delete.title"]}
@@ -75,7 +84,7 @@ export function DeleteDialog({
       }
       footer={
         <>
-          <Button ref={cancelRef} variant="secondary" onClick={onClose}>
+          <Button ref={cancelRef} variant="secondary" onClick={close}>
             {texts["delete.cancel"]}
           </Button>
           <Button variant="danger" loading={deletion.isPending} onClick={() => void confirm()}>
