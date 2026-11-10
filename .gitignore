@@ -2,7 +2,7 @@
 .env
 .env.*
 !.env.example
-secrets/
+/secrets/
 node_modules/
 .next/
 .pnpm-store/
@@ -18,3 +18,5 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 qa/fixtures/generated/
+next-env.d.ts
+*.tsbuildinfo
