@@ -1,9 +1,12 @@
-.PHONY: setup secrets up down lint typecheck test e2e ci images gen-api fixtures seed \
+.PHONY: setup secrets up down lint typecheck test test-api test-web e2e ci images gen-api fixtures seed \
 	contract a11y visual visual-baseline security audit-python audit-node gitleaks trivy zap load \
 	alerts verify-block
 
 API := uv run --directory apps/api
 export NEXT_TELEMETRY_DISABLED := 1
+# Testcontainers' Ryuk mounts the Docker socket; Docker Desktop for macOS cannot bind-mount the
+# socket under ~/.docker/run, only its VM path. On Linux this is the socket path anyway.
+export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE ?= /var/run/docker.sock
 
 # Stack under test for contract, security and load targets (`make up` publishes these ports).
 API_URL ?= http://localhost:$(or $(API_PORT),8000)
@@ -46,9 +49,14 @@ typecheck:
 	pnpm --filter web typecheck
 	pnpm --filter e2e typecheck
 
-test:
+test: test-api test-web
+
+test-api:
 	$(API) pytest
-	pnpm --filter web test
+
+# VITEST_ARGS: extra reporters for the gate, e.g. --reporter=junit --outputFile=…
+test-web:
+	pnpm --filter web test $(VITEST_ARGS)
 
 # Needs the stack from `make up`.
 e2e:

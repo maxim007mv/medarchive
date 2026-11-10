@@ -313,22 +313,16 @@ def run_static(gate: Gate) -> None:
     gate.run("make typecheck", ["make", "typecheck"])
     pytest_xml = gate.logs / "pytest.xml"
     gate.run(
-        "make test: pytest",
-        ["uv", "run", "--directory", "apps/api", "pytest"],
+        "make test-api (pytest)",
+        ["make", "test-api"],
         env={"PYTEST_ADDOPTS": f"--junitxml={pytest_xml}", "CONTRACT_BLOCK": str(gate.block)},
         summarize=from_report(lambda: read_junit(pytest_xml, "pytest"), gate),
     )
     vitest_xml = gate.logs / "vitest.xml"
-    vitest = [
-        "vitest",
-        "run",
-        "--reporter=default",
-        "--reporter=junit",
-        f"--outputFile={vitest_xml}",
-    ]
+    reporters = f"--reporter=default --reporter=junit --outputFile={vitest_xml}"
     gate.run(
-        "make test: vitest",
-        ["pnpm", "--filter", "web", "exec", *vitest],
+        "make test-web (vitest)",
+        ["make", "test-web", f"VITEST_ARGS={reporters}"],
         summarize=from_report(lambda: read_junit(vitest_xml, "vitest"), gate),
     )
     gate.run("web build", ["pnpm", "--filter", "web", "build"])
