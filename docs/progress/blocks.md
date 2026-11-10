@@ -54,14 +54,48 @@ E2E-тесты блоков после 1 (pending, не запускались):
 
 Итог: каркас блока 1 на этом HEAD не собирается из чистой копии из-за коммитов блока 2 (D-001, D-002). Локальные зелёные прогоны агентов шли по рабочему дереву, где исправления есть, но не закоммичены. Повторный прогон после исправления.
 
+#### Прогон 10.11.2026 23:26 MSK, `c251a5e`: FAIL
+
+Коммит `c251a5e` «docs(progress): backend documents results, decisions and open requests». Стек `medarchive_qa` (браузер `https://localhost:3444`, api :8900), логи `/tmp/medarchive-gate-logs/20261110-2315-c251a5e-b1`. Команда `tools/verify_block.sh 1`.
+
+| Шаг | Блокирует | Итог | Подробности | с |
+|---|---|---|---|---|
+| deps: pnpm install | да | pass | exit 0; лог `01-deps-pnpm-install.log` | 2 |
+| deps: uv sync | да | pass | exit 0; лог `02-deps-uv-sync.log` | 0 |
+| make fixtures | да | pass | exit 0; лог `03-make-fixtures.log` | 1 |
+| playwright browsers | да | pass | exit 0; лог `04-playwright-browsers.log` | 1 |
+| make lint | да | fail | exit 2; лог `05-make-lint.log` | 0 |
+| make typecheck | да | pass | exit 0; лог `06-make-typecheck.log` | 15 |
+| make test: pytest | да | fail | 241 passed, 194 failed, 0 skipped (exit 1); лог `07-make-test-pytest.log` | 31 |
+| make test: vitest | да | pass | 248 passed, 0 failed, 0 skipped (exit 0); лог `08-make-test-vitest.log` | 12 |
+| web build | да | pass | exit 0; лог `09-web-build.log` | 46 |
+| compose up, all services healthy | да | pass | exit 0; api healthy, db healthy, migrate exited(0), minio healthy, minio-init exited(0), redis healthy, tls healthy, web healthy, worker healthy; лог `10-compose-up-all-services-healthy.log` | 426 |
+| hardening (OPS-05, OPS-07) | нет | pass | medarchive/api:qa user=api healthcheck=yes; medarchive/web:qa user=node healthcheck=yes; api read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; web read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; migrate read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; api uid=10001; web uid=1000; api role=ma_app migrate role=ma_owner; app tables not owned | 1 |
+| api with RATE_LIMITS_ENABLED=false | да | pass | exit 0; лог `12-api-with-rate-limits-enabled-false.log` | 4 |
+| e2e @b[1-1]\b, limits off | да | pass | 5 passed, 0 failed, 0 skipped (exit 0); лог `13-e2e-b-1-1-b-limits-off.log` | 7 |
+| api with RATE_LIMITS_ENABLED=true | да | pass | exit 0; лог `14-api-with-rate-limits-enabled-true.log` | 18 |
+| pip-audit (OPS-04) | нет | pass | 52 packages, vulnerabilities []; лог `15-pip-audit-ops-04.log` | 6 |
+| pnpm audit --prod (OPS-04) | нет | fail | info 0, low 0, moderate 2, high 2, critical 0; лог `16-pnpm-audit-prod-ops-04.log` | 1 |
+| gitleaks, git history (OPS-04) | нет | pass | findings by rule [] (values redacted); лог `17-gitleaks-git-history-ops-04.log` | 1 |
+| trivy medarchive/api:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `18-trivy-medarchive-api-qa-ops-04-ops-05.log` | 25 |
+| trivy medarchive/web:qa (OPS-04, OPS-05) | нет | fail | fixable CRITICAL 0 [], HIGH 2 ['CVE-2026-45623', 'CVE-2026-73646']; лог `19-trivy-medarchive-web-qa-ops-04-ops-05.log` | 23 |
+| trivy python:3.12-slim-bookworm (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `20-trivy-python-3-12-slim-bookworm-ops-04-ops-05.log` | 4 |
+| trivy node:22-alpine (OPS-04, OPS-05) | нет | fail | fixable CRITICAL 0 [], HIGH 9 ['CVE-2026-102276', 'CVE-2026-102278', 'CVE-2026-13149', 'CVE-2026-14257', 'CVE-2026-33671']; лог `21-trivy-node-22-alpine-ops-04-ops-05.log` | 2 |
+
+E2E-тесты блоков после 1 (pending, не запускались): 189.
+
+Итог: FAIL. `make lint` красный из-за D-010. 194 падения pytest вызвал сам гейт, а не код: Ryuk из Testcontainers монтирует сокет Docker по пути `~/.docker/run/docker.sock`, который Docker Desktop для macOS смонтировать не может (`mkdir … operation not supported`); исправлено в `36acdc6` (`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` в Makefile, гейт вызывает `make test-api`), проверено на TC-091 для PostgreSQL 17 и 18. Trivy образа web: 2 HIGH в `postcss@8.4.31`, это D-003 в рабочем образе; находок npm больше нет (D-004 подтверждён). Стек через https, жёсткость образов и E2E блока 1 (5 из 5) зелёные.
+
 ### Дефекты
 
 | ID | Класс | Владелец | Что | Шаги | Ожидаемо | Фактически | Статус |
 |---|---|---|---|---|---|---|---|
 | D-001 | блокирует гейт | FRONTEND-FOUNDATION | Lock-файл нарушает политику `minimumReleaseAge` pnpm 12: `@testing-library/user-event@14.6.9` опубликован 10.11.2026 03:46 UTC, моложе суток | Чистый `git worktree` на `5fb9fe3`, `pnpm install --frozen-lockfile`; то же делает `RUN pnpm install --frozen-lockfile --filter web` в `apps/web/Dockerfile` | Установка и сборка образа web проходят | `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`; падают `make setup`, `make lint` (web), `make typecheck`, vitest, `next build`, образ web, `compose up`. Пакет добавлен коммитом `11840b0`; исключение `minimumReleaseAgeExclude` лежит в рабочем дереве `pnpm-workspace.yaml` и не закоммичено. Предложение: закрепить предыдущую версию user-event вместо исключения (политика защищает от только что опубликованных пакетов, T15), либо закоммитить исключение вместе с lock-файлом | исправлено в `b524a9b` (зависимости закреплены в пределах политики, без исключения) |
 | D-002 | блокирует гейт | BACKEND-DOCUMENTS | `ruff format --check` не проходит на закоммиченном `apps/api/app/modules/documents/listing.py:121` | `make lint` на `5fb9fe3` | Чисто | `1 file would be reformatted`; в рабочем дереве файл изменён, правка не закоммичена | исправлено в `5a9de70` |
-| D-003 | OPS-04, блок 7 | FRONTEND-FOUNDATION | `pnpm audit --prod`: 2 high в `postcss`, который тянет `next` (`apps__web>next>postcss`): GHSA-6g55-p6wh-862q (`<=8.5.11`) и GHSA-r28c-9q8g-f849 (`<=8.5.17`), исправлено в `>=8.5.18`; ещё 2 moderate | `make audit-node` | 0 high и critical | high 2, moderate 2. Риск на практике низкий (PostCSS работает при сборке, исходники CSS свои), но гейт блока 7 блокирует. Предложение: `pnpm.overrides` `postcss: ">=8.5.18"` в корневом `package.json` или обновление `next` | открыт |
-| D-004 | OPS-05, блок 7 | QA & SECURITY-OPS | Trivy `node:22-alpine`: 10 находок HIGH с исправлением, все в npm, который лежит в образе (`/usr/local/lib/node_modules/npm`: brace-expansion, ip-address, pacote, picomatch, sigstore). Рабочему образу web npm, npx, corepack и yarn не нужны | `make trivy IMAGE=node:22-alpine` | 0 fixable HIGH | 9 уникальных CVE HIGH | исправлено в рабочей стадии `apps/web/Dockerfile` (удалены npm, npx, corepack, yarn); проверено сборкой той же стадии отдельно: Trivy 0 fixable HIGH и CRITICAL, `node -v` v22.23.4, uid 1000. Полный образ web проверит следующий гейт после D-001. Сырые базовые образы гейт показывает, но не блокирует |
+| D-003 | OPS-04, блок 7 | FRONTEND-FOUNDATION | `pnpm audit --prod`: 2 high в `postcss`, который тянет `next` (`apps__web>next>postcss`): GHSA-6g55-p6wh-862q (`<=8.5.11`) и GHSA-r28c-9q8g-f849 (`<=8.5.17`), исправлено в `>=8.5.18`; ещё 2 moderate | `make audit-node` | 0 high и critical | high 2, moderate 2. Риск на практике низкий (PostCSS работает при сборке, исходники CSS свои), но гейт блока 7 блокирует. Предложение: `pnpm.overrides` `postcss: ">=8.5.18"` в корневом `package.json` или обновление `next`. Гейт `c251a5e`: та же `postcss@8.4.31` попадает в рабочий образ web (Trivy: CVE-2026-45623, CVE-2026-73646) | открыт |
+| D-010 | блокирует гейт | BACKEND-CORE | `make lint` красный на HEAD: ruff PT011 `pytest.raises(OSError)` без `match` в `apps/api/tests/unit/test_crypto.py:97` (коммит `098533d`, BE-15, исправление D-007) | `make lint` на `c251a5e` | Чисто | `Found 1 error` | открыт |
+| D-010 | блокирует гейт | BACKEND-CORE | `make lint` красный на HEAD: ruff PT011 `pytest.raises(OSError)` без `match` в `apps/api/tests/unit/test_crypto.py:97` (коммит `098533d`, BE-15, исправление D-007) | `make lint` на `c251a5e` | Чисто | `Found 1 error` | открыт |
+| D-004 | OPS-05, блок 7 | QA & SECURITY-OPS | Trivy `node:22-alpine`: 10 находок HIGH с исправлением, все в npm, который лежит в образе (`/usr/local/lib/node_modules/npm`: brace-expansion, ip-address, pacote, picomatch, sigstore). Рабочему образу web npm, npx, corepack и yarn не нужны | `make trivy IMAGE=node:22-alpine` | 0 fixable HIGH | 9 уникальных CVE HIGH | закрыт: гейт `c251a5e` не нашёл находок npm в `medarchive/web:qa`. Исправлено в рабочей стадии `apps/web/Dockerfile` (удалены npm, npx, corepack, yarn); проверено сборкой той же стадии отдельно: Trivy 0 fixable HIGH и CRITICAL, `node -v` v22.23.4, uid 1000. Полный образ web проверит следующий гейт после D-001. Сырые базовые образы гейт показывает, но не блокирует |
 
 ## Блок 2
 
