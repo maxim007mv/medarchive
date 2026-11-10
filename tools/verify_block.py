@@ -763,6 +763,16 @@ def main() -> int:
     )
     section = report_markdown(gate, sha, subject, required, passed)
     (logs / "summary.md").write_text(section)
+    # Every catalogue case, not only the required ones: the source of the QA-08 release report.
+    verdicts = {
+        tc: {
+            "priority": priority,
+            "verdict": verdict(by_tc.get(tc, [])),
+            "required": tc in required,
+        }
+        for tc, priority in catalogue().items()
+    }
+    (logs / "tc.json").write_text(json.dumps(verdicts, ensure_ascii=False, indent=2))
     if not args.no_record:
         append_to_blocks_md(args.block, section)
     print(section)
