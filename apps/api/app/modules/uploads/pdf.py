@@ -2,7 +2,7 @@
 
 from typing import BinaryIO, Literal
 
-from pypdf import PdfReader
+from pypdf import PasswordType, PdfReader
 
 PDF_SIGNATURE = b"%PDF-"
 # CHECK on document_files.page_count; a longer file is stored without a page count.
@@ -20,10 +20,12 @@ class PdfRejectedError(Exception):
 
 
 def inspect_pdf(stream: BinaryIO) -> int | None:
-    """Return the page count of an unencrypted PDF, or None if it exceeds what the schema stores.
+    """Return the page count of a PDF that opens without a password, or None if it exceeds what
+    the schema stores. A PDF with only an owner password (no printing or editing) opens and is
+    accepted as is.
 
     Raises PdfRejectedError: `not_pdf` without the `%PDF-` signature at offset 0, `pdf_encrypted`
-    for any encrypted file (even with an empty user password), `pdf_unreadable` when pypdf fails.
+    when a user password is needed to open it, `pdf_unreadable` when pypdf fails.
     """
     stream.seek(0)
     if stream.read(len(PDF_SIGNATURE)) != PDF_SIGNATURE:
@@ -31,13 +33,13 @@ def inspect_pdf(stream: BinaryIO) -> int | None:
     stream.seek(0)
     try:
         reader = PdfReader(stream)
-        is_encrypted = reader.is_encrypted
-        page_count = 0 if is_encrypted else len(reader.pages)
+        needs_password = reader.is_encrypted and (reader.decrypt("") == PasswordType.NOT_DECRYPTED)
+        page_count = 0 if needs_password else len(reader.pages)
     # pypdf raises arbitrary exception types (KeyError, ValueError, RecursionError, ...) on
     # malformed input, and every one of them means the same thing for an upload.
     except Exception as exc:
         raise PdfRejectedError("pdf_unreadable") from exc
-    if is_encrypted:
+    if needs_password:
         raise PdfRejectedError("pdf_encrypted")
     if page_count == 0:
         raise PdfRejectedError("pdf_unreadable")

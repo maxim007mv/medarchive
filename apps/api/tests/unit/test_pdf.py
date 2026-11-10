@@ -24,9 +24,9 @@ def _pdf_with_pages(page_count: int) -> bytes:
     return out.getvalue()
 
 
-def _encrypted(source: bytes, user_password: str) -> bytes:
+def _encrypted(source: bytes, user_password: str, *, algorithm: str) -> bytes:
     writer = PdfWriter(clone_from=PdfReader(BytesIO(source)))
-    writer.encrypt(user_password=user_password, owner_password=OWNER, algorithm="AES-256")
+    writer.encrypt(user_password=user_password, owner_password=OWNER, algorithm=algorithm)
     out = BytesIO()
     writer.write(out)
     return out.getvalue()
@@ -69,6 +69,16 @@ def test_tc018_truncated_pdf_is_unreadable() -> None:
     assert _reject_code(source[: len(source) // 2]) == "pdf_unreadable"
 
 
-@pytest.mark.parametrize("user_password", ["secret", ""], ids=["TC-017-password", "empty-password"])
-def test_tc017_encrypted_pdf_is_rejected(user_password: str) -> None:
-    assert _reject_code(_encrypted(SOURCE_PDF.read_bytes(), user_password)) == "pdf_encrypted"
+@pytest.mark.parametrize("algorithm", ["AES-256", "AES-128", "RC4-128"])
+def test_tc017_pdf_that_needs_a_password_to_open_is_rejected(algorithm: str) -> None:
+    data = _encrypted(SOURCE_PDF.read_bytes(), "secret", algorithm=algorithm)
+
+    assert _reject_code(data) == "pdf_encrypted"
+
+
+@pytest.mark.parametrize("algorithm", ["AES-256", "AES-128", "RC4-128"])
+def test_owner_password_only_pdf_is_accepted(algorithm: str) -> None:
+    # Clinic and lab PDFs: no printing or editing, but they open without a password.
+    data = _encrypted(SOURCE_PDF.read_bytes(), "", algorithm=algorithm)
+
+    assert inspect_pdf(BytesIO(data)) == 1

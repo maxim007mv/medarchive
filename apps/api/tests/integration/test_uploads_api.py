@@ -1,3 +1,4 @@
+import io
 import secrets
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from documents_support import (
     upload,
     write_headers,
 )
+from pypdf import PdfReader, PdfWriter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -163,3 +165,24 @@ async def test_consumed_upload_cannot_make_a_second_document(api: Api) -> None:
     assert first.status_code == 201
     assert second.status_code == 404
     assert second.json()["code"] == "upload_not_found"
+
+
+def _owner_password_only(source: bytes) -> bytes:
+    writer = PdfWriter(clone_from=PdfReader(io.BytesIO(source)))
+    writer.encrypt(user_password="", owner_password=secrets.token_hex(8), algorithm="AES-256")
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+async def test_owner_password_only_pdf_is_stored(api: Api) -> None:
+    data = _owner_password_only(SOURCES[0].path.read_bytes())
+    async with api.client() as client:
+        created = await create_archive(client)
+        upload_id = await upload(client, created, data, "lab-report.pdf")
+        response = await create_document(client, created, upload_id, title="Выписка")
+        content = await client.get(f"/api/v1/documents/{response.json()['id']}/content")
+
+    assert response.status_code == 201, response.text
+    assert response.json()["file"]["page_count"] == 1
+    assert content.content == data
