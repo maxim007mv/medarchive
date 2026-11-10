@@ -2,3 +2,5 @@
 lib/api/schema.d.ts
 # Verbatim copy of MedArchive/02_design/tokens.css; must stay byte-identical to the source.
 styles/tokens.css
+# Generated from docs/texts.md by scripts/gen-texts.mjs; lib/texts.test.ts checks it byte for byte.
+lib/texts.ts

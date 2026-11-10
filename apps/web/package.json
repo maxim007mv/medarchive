@@ -10,7 +10,9 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "gen:api": "openapi-typescript ../../openapi.yaml -o lib/api/schema.d.ts"
+    "gen:api": "openapi-typescript ../../openapi.yaml -o lib/api/schema.d.ts",
+    "gen:texts": "node scripts/gen-texts.mjs",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.5",
