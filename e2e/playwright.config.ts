@@ -22,6 +22,8 @@ export default defineConfig({
   },
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+    // The `tls` compose profile (ADR-048) signs with Caddy's local CA, unknown to test browsers.
+    ignoreHTTPSErrors: true,
     locale: "ru-RU",
     timezoneId: "Europe/Moscow",
     trace: "retain-on-failure",
