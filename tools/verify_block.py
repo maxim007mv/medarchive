@@ -393,8 +393,23 @@ def run_playwright(gate: Gate, name: str, grep: str, *extra: str) -> None:
     gate.run(
         name,
         # Three workers: each test seeds its own archive, and the Docker VM is shared (D-011).
-        ["pnpm", "--filter", "e2e", "exec", "playwright", "test", "--workers=3", "--grep", grep, *extra],
-        env={"E2E_BASE_URL": WEB_URL, "E2E_RESULTS_DIR": str(results_dir)},
+        [
+            "pnpm",
+            "--filter",
+            "e2e",
+            "exec",
+            "playwright",
+            "test",
+            "--workers=3",
+            "--grep",
+            grep,
+            *extra,
+        ],
+        env={
+            "E2E_BASE_URL": WEB_URL,
+            "E2E_RESULTS_DIR": str(results_dir),
+            "E2E_COMPOSE_PROJECT": PROJECT,
+        },
         timeout_s=3600,
         summarize=from_report(lambda: read_playwright(results_dir / "report.json"), gate),
     )
@@ -508,6 +523,10 @@ def run_pii_scan(gate: Gate) -> None:
     )
     gate.record(
         "PII scan: logs and DB dump (TC-096)", gate.block >= HARDENING_BLOCK, ok, detail, started
+    )
+    status = "passed" if ok else "failed"
+    gate.results.append(
+        TestResult("gate", "TC-096 no titles, notes or file names in plaintext", status)
     )
     (gate.logs / "pii-found.json").write_text(json.dumps({"logs": len(in_logs), "db": len(in_db)}))
 

@@ -4,9 +4,10 @@
 
 API := uv run --directory apps/api
 export NEXT_TELEMETRY_DISABLED := 1
-# Testcontainers' Ryuk mounts the Docker socket; Docker Desktop for macOS cannot bind-mount the
-# socket under ~/.docker/run, only its VM path. On Linux this is the socket path anyway.
-export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE ?= /var/run/docker.sock
+# Testcontainers' Ryuk fails on Docker Desktop for macOS: it cannot bind-mount ~/.docker/run's
+# socket, and with the VM socket its port 8080 is often not published in time under load. The
+# fixtures stop their containers; an interrupted run leaves them behind (D-011).
+export TESTCONTAINERS_RYUK_DISABLED ?= true
 
 # Stack under test for contract, security and load targets (`make up` publishes these ports).
 API_URL ?= http://localhost:$(or $(API_PORT),8000)
