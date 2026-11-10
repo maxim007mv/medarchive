@@ -1991,7 +1991,7 @@ paths:
                 pdf_encrypted:
                   value:
                     type: urn:problem-type:medarchive:pdf_encrypted
-                    title: PDF защищён паролем. Снимите пароль и загрузите снова
+                    title: PDF требует пароль для открытия. Снимите пароль и загрузите снова
                     status: 422
                     code: pdf_encrypted
                     request_id: req_01930c9a

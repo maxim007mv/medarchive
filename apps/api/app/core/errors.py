@@ -80,7 +80,7 @@ CATALOG: Mapping[ErrorCode, CatalogEntry] = {
         422, "Не удаётся открыть этот PDF. Возможно, он повреждён"
     ),
     ErrorCode.PDF_ENCRYPTED: CatalogEntry(
-        422, "PDF защищён паролем. Снимите пароль и загрузите снова"
+        422, "PDF требует пароль для открытия. Снимите пароль и загрузите снова"
     ),
     ErrorCode.UPLOAD_NOT_FOUND: CatalogEntry(404, "Загрузка не найдена. Выберите файл ещё раз"),
     ErrorCode.UPLOAD_EXPIRED: CatalogEntry(410, "Загрузка устарела. Выберите файл ещё раз"),
