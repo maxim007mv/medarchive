@@ -1,12 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { expect, test } from "vitest";
 
 import { errorTitles, texts } from "@/lib/texts";
 import { parseDate } from "@/lib/format";
 
 import { DateInput } from "./date-input";
+import { Dialog } from "./dialog";
 
 function DateField({ initial = "", max }: { initial?: string; max?: string }) {
   const [value, setValue] = useState(initial);
@@ -47,7 +48,7 @@ test("FE-04: 29.02.2028 is a valid leap day and the calendar opens on it", async
   expect(day).toHaveFocus();
 });
 
-test("FE-04: the calendar is driven by the keyboard and returns focus to its button", async () => {
+test("FE-04: the calendar is driven by the keyboard and returns focus to the date field", async () => {
   render(<DateField initial="08.04.2026" />);
   const calendarButton = screen.getByRole("button", { name: texts["upload.date.calendar"] });
 
@@ -58,7 +59,7 @@ test("FE-04: the calendar is driven by the keyboard and returns focus to its but
 
   expect(field()).toHaveValue("16.04.2026");
   expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  expect(calendarButton).toHaveFocus();
+  expect(field()).toHaveFocus();
 });
 
 test("FE-04: days after max are not offered", async () => {
@@ -85,4 +86,31 @@ test("FE-04: a disabled date field shows «Не указана» and opens no ca
   expect(field()).toBeDisabled();
   expect(field()).toHaveValue(texts["upload.date.noneValue"]);
   expect(screen.queryByRole("table")).not.toBeInTheDocument();
+});
+
+test("FE-04: inside a dialog, Esc closes the calendar first and the dialog next", async () => {
+  function DialogWithDate() {
+    const [open, setOpen] = useState(true);
+    const [value, setValue] = useState("");
+    return (
+      <Dialog open={open} onOpenChange={setOpen} title={texts["upload.title"]}>
+        <DateInput label={texts["upload.date.label"]} value={value} onChange={setValue} />
+      </Dialog>
+    );
+  }
+  render(
+    <StrictMode>
+      <DialogWithDate />
+    </StrictMode>,
+  );
+
+  screen.getByRole("button", { name: texts["upload.date.calendar"] }).focus();
+  await userEvent.keyboard("{Enter}");
+  expect(await screen.findByRole("table")).toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
+
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(field()).toHaveFocus();
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });

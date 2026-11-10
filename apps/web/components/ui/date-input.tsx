@@ -37,9 +37,10 @@ export type DateInputProps = Omit<
  * Date field (FE-04): typing with the `дд.мм.гггг` mask comes first, the calendar in a popover
  * is the second way. Validation is the form's job, so errors show only after a save attempt.
  */
-export function DateInput({ value, onChange, max, disabled, ...props }: DateInputProps) {
+export function DateInput({ value, onChange, max, disabled, className, ...props }: DateInputProps) {
   const [open, setOpen] = useState(false);
-  const frameRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const calendarButtonRef = useRef<HTMLButtonElement>(null);
   const selected = parseDate(value);
 
   function pick(isoDate: string) {
@@ -49,37 +50,58 @@ export function DateInput({ value, onChange, max, disabled, ...props }: DateInpu
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Anchor virtualRef={frameRef} />
-      <Input
-        {...props}
-        frameRef={frameRef}
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
-        maxLength={10}
-        placeholder={texts["upload.date.placeholder"]}
-        disabled={disabled}
-        value={value}
-        onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(maskDate(event.target.value))}
-        leading={
-          <Popover.Trigger asChild>
+      {/* The whole field is the anchor: the calendar opens under it, aligned to its left edge. */}
+      <Popover.Anchor ref={anchorRef} className={className}>
+        <Input
+          {...props}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={10}
+          placeholder={texts["upload.date.placeholder"]}
+          disabled={disabled}
+          value={value}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            onChange(maskDate(event.target.value))
+          }
+          // Not a Popover.Trigger: with a custom anchor Radix re-wraps the trigger and remounts
+          // the focused button, which loses focus and Esc handling.
+          leading={
             <IconButton
+              ref={calendarButtonRef}
               size="sm"
               icon={CalendarDays}
               aria-label={texts["upload.date.calendar"]}
+              aria-haspopup="dialog"
+              aria-expanded={open}
               disabled={disabled}
+              onClick={() => setOpen((isOpen) => !isOpen)}
               className="-ml-2"
             />
-          </Popover.Trigger>
-        }
-      />
+          }
+        />
+      </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
           align="start"
           sideOffset={6}
-          // Focus goes to the grid's current day, set by Calendar itself.
-          onOpenAutoFocus={(event) => event.preventDefault()}
-          className="animate-fade-in bg-raised shadow-3 z-50 rounded-xl p-3"
+          // Start on the grid's current day. Here, not in Calendar's mount effect: by now Radix
+          // has paused the focus trap of an enclosing dialog, which would pull focus back.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            const content = event.currentTarget as HTMLElement;
+            content.querySelector<HTMLButtonElement>('table [tabindex="0"]')?.focus();
+          }}
+          // Back to the text field, where typing continues; the calendar button would pop its tooltip.
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            anchorRef.current?.querySelector("input")?.focus();
+          }}
+          // A press on the calendar button toggles by itself; closing here too would reopen it.
+          onInteractOutside={(event) => {
+            if (calendarButtonRef.current?.contains(event.target as Node)) event.preventDefault();
+          }}
+          className="bg-raised shadow-3 motion-safe:animate-fade-in z-50 rounded-xl p-3"
         >
           <Calendar selected={selected} max={max} onPick={pick} />
         </Popover.Content>
@@ -113,8 +135,8 @@ function Calendar({
     selected ? parseISO(selected) : (maxDate ?? new Date()),
   );
   const gridRef = useRef<HTMLTableElement>(null);
-  // Focus the active day on open and after arrow keys, but not when the month buttons page.
-  const focusActiveDay = useRef(true);
+  // Focus follows the active day after arrow keys, but not when the month buttons page.
+  const focusActiveDay = useRef(false);
   const today = new Date();
 
   const firstShown = startOfWeek(startOfMonth(active), { weekStartsOn: 1 });

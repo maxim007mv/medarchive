@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentPropsWithRef, ReactNode, Ref } from "react";
+import type { ComponentPropsWithRef, ReactNode } from "react";
 
 import { cn } from "./cn";
 import { Field, fieldFrameClasses, useFieldIds, type FieldProps } from "./field";
@@ -11,8 +11,6 @@ export type InputProps = Omit<ComponentPropsWithRef<"input">, "className"> &
     leading?: ReactNode;
     /** Inside the field on the right, e.g. the `/` hotkey hint or a clear button. */
     trailing?: ReactNode;
-    /** The bordered frame, for popovers that align with the whole field. */
-    frameRef?: Ref<HTMLDivElement>;
     className?: string;
   };
 
@@ -24,7 +22,6 @@ export function Input({
   counter,
   leading,
   trailing,
-  frameRef,
   className,
   id,
   disabled,
@@ -44,7 +41,6 @@ export function Input({
         counter={counter}
       >
         <div
-          ref={frameRef}
           className={cn(
             "h-control-md text-body flex items-center gap-2 px-3",
             fieldFrameClasses({ error, disabled }),
