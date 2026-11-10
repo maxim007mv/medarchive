@@ -172,6 +172,45 @@ E2E-тесты блоков после 2 (pending, не запускались):
 
 Итог: FAIL, но вердикт TC неверный по вине гейта: шаблон TC не находил `test_tc091_…` (подчёркивание перед `tc`), а тесты TC-091 и TC-092 есть (`apps/api/tests/db`, прогон блока 1 на том же коммите: все зелёные). Исправлено в следующем коммите гейта. 155 ошибок setup интеграционных тестов: MinIO из Testcontainers не опубликовал порт 9000 вовремя (D-013). Миграции на PostgreSQL 17 и 18, контракт каталога ошибок и UI unit-тесты зелёные.
 
+#### Прогон 11.11.2026 00:23 MSK, `f38a771`: PASS
+
+Коммит `f38a771` «docs(QA-08): block 1 gate PASS on b748c48; block 2 run annotated, TC pattern fixed, D-013». Стек `medarchive_qa` (браузер `https://localhost:3444`, api :8900), логи `/tmp/medarchive-gate-logs/20261111-0015-f38a771-b2`. Команда `tools/verify_block.sh 2`.
+
+| Шаг | Блокирует | Итог | Подробности | с |
+|---|---|---|---|---|
+| deps: pnpm install | да | pass | exit 0; лог `01-deps-pnpm-install.log` | 1 |
+| deps: uv sync | да | pass | exit 0; лог `02-deps-uv-sync.log` | 0 |
+| make fixtures | да | pass | exit 0; лог `03-make-fixtures.log` | 0 |
+| playwright browsers | да | pass | exit 0; лог `04-playwright-browsers.log` | 1 |
+| make lint | да | pass | exit 0; лог `05-make-lint.log` | 9 |
+| make typecheck | да | pass | exit 0; лог `06-make-typecheck.log` | 18 |
+| make test-api (pytest) | да | pass | 606 passed, 0 failed, 0 skipped (exit 0); лог `07-make-test-api-pytest.log` | 203 |
+| make test-web (vitest) | да | pass | 249 passed, 0 failed, 0 skipped (exit 0); лог `08-make-test-web-vitest.log` | 8 |
+| web build | да | pass | exit 0; лог `09-web-build.log` | 23 |
+| compose up, all services healthy | да | pass | exit 0; api healthy, db healthy, migrate exited(0), minio healthy, minio-init exited(0), redis healthy, tls healthy, web healthy, worker healthy; лог `10-compose-up-all-services-healthy.log` | 97 |
+| UI unit tests (FE-03..FE-09) | да | pass | 100 passed, 0 failed, 0 skipped (components/) | 0 |
+| error catalog contract (BE-03) | да | pass | 3 passed, 0 failed, 0 skipped (catalog) | 0 |
+| migrations up/down on PostgreSQL 17 | да | pass | PostgreSQL 17: upgrade head, downgrade base, upgrade head passed; лог `13-migrations-up-down-on-postgresql-17.log` | 5 |
+| migrations up/down on PostgreSQL 18 | да | pass | PostgreSQL 18: upgrade head, downgrade base, upgrade head passed; лог `14-migrations-up-down-on-postgresql-18.log` | 6 |
+| hardening (OPS-05, OPS-07) | нет | pass | medarchive/api:qa user=api healthcheck=yes; medarchive/web:qa user=node healthcheck=yes; api read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; web read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; migrate read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; api uid=10001; web uid=1000; api role=ma_app migrate role=ma_owner; app tables not owned | 1 |
+| api with RATE_LIMITS_ENABLED=false | да | pass | exit 0; лог `16-api-with-rate-limits-enabled-false.log` | 14 |
+| e2e @b[1-2]\b, limits off | да | pass | 5 passed, 0 failed, 0 skipped (exit 0); лог `17-e2e-b-1-2-b-limits-off.log` | 5 |
+| api with RATE_LIMITS_ENABLED=true | да | pass | exit 0; лог `18-api-with-rate-limits-enabled-true.log` | 14 |
+| pip-audit (OPS-04) | нет | pass | 52 packages, vulnerabilities []; лог `19-pip-audit-ops-04.log` | 6 |
+| pnpm audit --prod (OPS-04) | нет | pass | info 0, low 0, moderate 0, high 0, critical 0; лог `20-pnpm-audit-prod-ops-04.log` | 1 |
+| gitleaks, git history (OPS-04) | нет | pass | findings by rule [] (values redacted); лог `21-gitleaks-git-history-ops-04.log` | 1 |
+| trivy medarchive/api:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `22-trivy-medarchive-api-qa-ops-04-ops-05.log` | 12 |
+| trivy medarchive/web:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `23-trivy-medarchive-web-qa-ops-04-ops-05.log` | 4 |
+| trivy python:3.12-slim-bookworm (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `24-trivy-python-3-12-slim-bookworm-ops-04-ops-05.log` | 0 |
+| trivy node:22-alpine (OPS-04, OPS-05) | нет | fail | fixable CRITICAL 0 [], HIGH 9 ['CVE-2026-102276', 'CVE-2026-102278', 'CVE-2026-13149', 'CVE-2026-14257', 'CVE-2026-33671']; лог `25-trivy-node-22-alpine-ops-04-ops-05.log` | 0 |
+
+| TC | Итог | Тесты |
+|---|---|---|
+| TC-091 | pass | pytest passed |
+| TC-092 | pass | pytest passed |
+
+E2E-тесты блоков после 2 (pending, не запускались): 220.
+
 ### Дефекты
 
 | ID | Класс | Владелец | Что | Шаги | Ожидаемо | Фактически | Статус |
@@ -180,6 +219,54 @@ E2E-тесты блоков после 2 (pending, не запускались):
 | D-013 | флаки окружения | BACKEND-DOCUMENTS | `apps/api/tests/integration/conftest.py`, `_start_minio`: на Docker Desktop под нагрузкой порт 9000 контейнера MinIO публикуется с задержкой; после `STARTUP_ATTEMPTS` попыток фикстура сессии падает, и все интеграционные тесты получают ошибку setup | Гейт блока 2 на `b748c48` (`make test-api`) | Интеграционные тесты стабильны | 155 ошибок `ConnectionError: Port mapping for container … and port 9000 is not available`; на том же коммите в прогоне блока 1 тех же ошибок не было. Предложение: ждать публикации порта с таймаутом (опрос `get_exposed_port`), а не пересоздавать контейнер | открыт |
 
 ## Блок 3
+
+#### Прогон 11.11.2026 00:27 MSK, `b7d2fa7`: FAIL
+
+Коммит `b7d2fa7` «docs(BE-11): CSV type column is the Russian type name; owner decisions recorded». Стек `medarchive_qa` (браузер `https://localhost:3444`, api :8900), логи `/tmp/medarchive-gate-logs/20261111-0023-b7d2fa7-b3`. Команда `tools/verify_block.sh 3`.
+
+| Шаг | Блокирует | Итог | Подробности | с |
+|---|---|---|---|---|
+| deps: pnpm install | да | pass | exit 0; лог `01-deps-pnpm-install.log` | 0 |
+| deps: uv sync | да | pass | exit 0; лог `02-deps-uv-sync.log` | 0 |
+| make fixtures | да | pass | exit 0; лог `03-make-fixtures.log` | 0 |
+| playwright browsers | да | pass | exit 0; лог `04-playwright-browsers.log` | 1 |
+| make lint | да | pass | exit 0; лог `05-make-lint.log` | 4 |
+| make typecheck | да | pass | exit 0; лог `06-make-typecheck.log` | 11 |
+| make test-api (pytest) | да | pass | 612 passed, 0 failed, 0 skipped (exit 0); лог `07-make-test-api-pytest.log` | 99 |
+| make test-web (vitest) | да | pass | 249 passed, 0 failed, 0 skipped (exit 0); лог `08-make-test-web-vitest.log` | 7 |
+| web build | да | pass | exit 0; лог `09-web-build.log` | 21 |
+| compose up, all services healthy | да | pass | exit 0; api healthy, db healthy, migrate exited(0), minio healthy, minio-init exited(0), redis healthy, tls healthy, web healthy, worker healthy; лог `10-compose-up-all-services-healthy.log` | 41 |
+| UI unit tests (FE-03..FE-09) | да | pass | 100 passed, 0 failed, 0 skipped (components/) | 0 |
+| error catalog contract (BE-03) | да | pass | 3 passed, 0 failed, 0 skipped (catalog) | 0 |
+| migrations up/down on PostgreSQL 17 | да | pass | PostgreSQL 17: upgrade head, downgrade base, upgrade head passed; лог `13-migrations-up-down-on-postgresql-17.log` | 5 |
+| migrations up/down on PostgreSQL 18 | да | pass | PostgreSQL 18: upgrade head, downgrade base, upgrade head passed; лог `14-migrations-up-down-on-postgresql-18.log` | 5 |
+| hardening (OPS-05, OPS-07) | нет | pass | medarchive/api:qa user=api healthcheck=yes; medarchive/web:qa user=node healthcheck=yes; api read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; web read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; migrate read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; api uid=10001; web uid=1000; api role=ma_app migrate role=ma_owner; app tables not owned | 1 |
+| api with RATE_LIMITS_ENABLED=false | да | pass | exit 0; лог `16-api-with-rate-limits-enabled-false.log` | 13 |
+| e2e @b[1-3]\b, limits off | да | fail | 27 passed, 2 failed, 0 skipped (exit 1); лог `17-e2e-b-1-3-b-limits-off.log` | 12 |
+| api with RATE_LIMITS_ENABLED=true | да | pass | exit 0; лог `18-api-with-rate-limits-enabled-true.log` | 13 |
+| schemathesis --checks all | нет | pass | 7 passed, 0 failed, 0 skipped (exit 0); лог `19-schemathesis-checks-all.log` | 4 |
+| schemathesis --checks all, session-ending | нет | pass | 1 passed, 0 failed, 0 skipped (exit 0); лог `20-schemathesis-checks-all-session-ending.log` | 1 |
+| pip-audit (OPS-04) | нет | pass | 52 packages, vulnerabilities []; лог `21-pip-audit-ops-04.log` | 1 |
+| pnpm audit --prod (OPS-04) | нет | pass | info 0, low 0, moderate 0, high 0, critical 0; лог `22-pnpm-audit-prod-ops-04.log` | 1 |
+| gitleaks, git history (OPS-04) | нет | pass | findings by rule [] (values redacted); лог `23-gitleaks-git-history-ops-04.log` | 0 |
+| trivy medarchive/api:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `24-trivy-medarchive-api-qa-ops-04-ops-05.log` | 0 |
+| trivy medarchive/web:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `25-trivy-medarchive-web-qa-ops-04-ops-05.log` | 0 |
+| trivy python:3.12-slim-bookworm (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `26-trivy-python-3-12-slim-bookworm-ops-04-ops-05.log` | 0 |
+| trivy node:22-alpine (OPS-04, OPS-05) | нет | fail | fixable CRITICAL 0 [], HIGH 9 ['CVE-2026-102276', 'CVE-2026-102278', 'CVE-2026-13149', 'CVE-2026-14257', 'CVE-2026-33671']; лог `27-trivy-node-22-alpine-ops-04-ops-05.log` | 0 |
+
+| TC | Итог | Тесты |
+|---|---|---|
+| TC-001 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-002 | pass | e2e:api passed, e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-003 | pass | e2e:api passed, pytest passed |
+| TC-004 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-091 | pass | pytest passed |
+| TC-092 | pass | pytest passed |
+| TC-093 | pass | e2e:api passed, pytest passed, vitest passed |
+
+E2E-тесты блоков после 3 (pending, не запускались): 196.
+
+Итог: FAIL только из-за D-009: тест `QA-07 policy page has no internal references` на обоих проектах находит служебную пометку в `/policy`. Все обязательные TC блоков 1..3 зелёные, в том числе TC-002 на WebKit через https; schemathesis `--checks all` по операциям блоков 1..3 без замечаний (8 операций).
 
 ### Дефекты
 
