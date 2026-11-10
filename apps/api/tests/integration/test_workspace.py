@@ -18,6 +18,7 @@ from api_stack import (
 from conftest import DatabaseUrls
 from httpx import AsyncClient, Response
 
+from app.core.ratelimit import WORKSPACE_DELETE, cookie_subject
 from app.db.engine import create_engine
 from app.modules.auth import service as auth_service
 from app.modules.auth.access_key import AccessKey, generate_access_key, parse_access_key
@@ -166,6 +167,58 @@ async def test_delete_with_stale_etag_is_version_conflict(api: Api) -> None:
     assert response.status_code == 412
     assert response.json()["code"] == "version_conflict"
     assert response.json()["etag"] == current
+
+
+def _delete_budget(response: Response) -> str:
+    assert response.headers["ratelimit-policy"] == '"workspace_delete";q=1;w=3600'
+    return response.headers["ratelimit"]
+
+
+async def test_rejected_deletes_do_not_spend_the_hourly_budget(api: Api) -> None:
+    async with api.client() as client:
+        created = await create_archive(client)
+        etag = (await client.get("/api/v1/workspace")).headers["etag"]
+        without_csrf = await client.request(
+            "DELETE", "/api/v1/workspace", headers={"If-Match": etag}
+        )
+        without_if_match = await client.request(
+            "DELETE", "/api/v1/workspace", headers=csrf(created)
+        )
+        stale = await client.request(
+            "DELETE", "/api/v1/workspace", headers={**csrf(created), "If-Match": '"w0"'}
+        )
+        accepted = await client.request(
+            "DELETE", "/api/v1/workspace", headers={**csrf(created), "If-Match": etag}
+        )
+        client.cookies.set("__Host-ma_sid", created.cookies["__Host-ma_sid"])
+        after = await client.request(
+            "DELETE", "/api/v1/workspace", headers={**csrf(created), "If-Match": etag}
+        )
+
+    statuses = [r.status_code for r in (without_csrf, without_if_match, stale, accepted, after)]
+    assert statuses == [403, 428, 412, 202, 401]
+    for rejected in (without_csrf, without_if_match, stale):
+        assert _delete_budget(rejected) == '"workspace_delete";r=1;t=0'
+    assert _delete_budget(accepted) == '"workspace_delete";r=0;t=3600'
+    assert _delete_budget(after).startswith('"workspace_delete";r=0;')
+
+
+async def test_delete_over_budget_is_429_and_keeps_the_archive(api: Api) -> None:
+    async with api.client() as client:
+        created = await create_archive(client)
+        etag = (await client.get("/api/v1/workspace")).headers["etag"]
+        subject = cookie_subject(created.cookies["__Host-ma_sid"])
+        await api.app.state.rate_limiter.hit(WORKSPACE_DELETE, subject)
+        response = await client.request(
+            "DELETE", "/api/v1/workspace", headers={**csrf(created), "If-Match": etag}
+        )
+        still_there = await client.get("/api/v1/workspace")
+
+    assert response.status_code == 429
+    assert response.json()["code"] == "rate_limited"
+    assert 3500 <= int(response.headers["retry-after"]) <= 3600
+    assert _delete_budget(response).startswith('"workspace_delete";r=0;')
+    assert still_there.status_code == 200
 
 
 async def test_document_types_are_cacheable_reference_data(api: Api) -> None:

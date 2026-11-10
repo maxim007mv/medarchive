@@ -9,6 +9,7 @@ from app.core.crypto import Kek
 from app.core.deps import SessionContext, load_workspace_keys, session_tx
 from app.core.errors import ErrorCode, ProblemError
 from app.core.idempotency import Operation, StoredResponse, run_idempotent
+from app.core.ratelimit import RateBudget
 from app.modules.auth import repository as auth_repository
 from app.modules.auth import service as auth_service
 from app.modules.auth.repository import IpPrefix
@@ -33,30 +34,44 @@ async def get_summary(db: AsyncSession, session: SessionContext) -> WorkspaceOut
 
 
 async def delete_workspace(
-    db: AsyncSession, session: SessionContext, if_match: str | None, ip_prefix: IpPrefix | None
+    db: AsyncSession,
+    session: SessionContext,
+    if_match: str | None,
+    ip_prefix: IpPrefix | None,
+    budget: RateBudget,
 ) -> datetime:
-    """Crypto-erase the archive if `If-Match` still matches; returns the purge deadline."""
+    """Crypto-erase the archive if `If-Match` still matches; returns the purge deadline.
+
+    Only an accepted deletion spends the hourly budget: it is consumed inside the transaction
+    after every precondition passed (an empty budget rolls the deletion back) and refunded if
+    the transaction fails afterwards.
+    """
     if not if_match:
         raise ProblemError(ErrorCode.PRECONDITION_REQUIRED)
-    async with session_tx(db, session):
-        summary = await repository.workspace_summary(db, session.workspace_id)
-        if summary is None:
-            raise ProblemError(ErrorCode.UNAUTHENTICATED)
-        current = workspace_etag(summary)
-        if if_match.strip() not in (current, ANY_ETAG):
-            raise ProblemError(ErrorCode.VERSION_CONFLICT, etag=current)
-        purge_after = await repository.delete_workspace(db)
-        if purge_after is None:
-            raise ProblemError(ErrorCode.UNAUTHENTICATED)
-        for action in ("workspace.delete", "consent.withdraw"):
-            await auth_repository.add_audit(
-                db,
-                session.workspace_id,
-                action,
-                session_id=session.session_id,
-                request_id=session.request_id,
-                ip_prefix=ip_prefix,
-            )
+    try:
+        async with session_tx(db, session):
+            summary = await repository.workspace_summary(db, session.workspace_id)
+            if summary is None:
+                raise ProblemError(ErrorCode.UNAUTHENTICATED)
+            current = workspace_etag(summary)
+            if if_match.strip() not in (current, ANY_ETAG):
+                raise ProblemError(ErrorCode.VERSION_CONFLICT, etag=current)
+            purge_after = await repository.delete_workspace(db)
+            if purge_after is None:
+                raise ProblemError(ErrorCode.UNAUTHENTICATED)
+            await budget.consume()
+            for action in ("workspace.delete", "consent.withdraw"):
+                await auth_repository.add_audit(
+                    db,
+                    session.workspace_id,
+                    action,
+                    session_id=session.session_id,
+                    request_id=session.request_id,
+                    ip_prefix=ip_prefix,
+                )
+    except Exception:
+        await budget.refund()
+        raise
     return purge_after
 
 

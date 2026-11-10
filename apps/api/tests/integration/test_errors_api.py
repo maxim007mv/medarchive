@@ -86,7 +86,6 @@ async def test_unauthenticated_and_access_key_invalid(api: Api) -> None:
 async def test_archive_deletion_guards(
     api: Api, with_csrf: bool, if_match: str | None, code: ErrorCode
 ) -> None:
-    # Deletion allows one request per hour per session, so each case has its own archive.
     async with api.client() as client:
         created = await create_archive(client)
         headers = csrf(created) if with_csrf else {}

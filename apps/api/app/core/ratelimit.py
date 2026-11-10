@@ -90,6 +90,22 @@ def gcra(policy: RatePolicy, stored_tat_ms: int | None, now_ms: int) -> Decision
     return Decision(True, remaining, _seconds(new_tat_ms - now_ms), new_tat_ms)
 
 
+def gcra_peek(policy: RatePolicy, stored_tat_ms: int | None, now_ms: int) -> Decision:
+    """The budget as it stands, without spending: `remaining` requests fit right now."""
+    tat_ms = max(stored_tat_ms or now_ms, now_ms)
+    remaining = (policy.window_ms - (tat_ms - now_ms)) // policy.emission_ms
+    if remaining < 1:
+        next_fits_in_ms = tat_ms + policy.emission_ms - policy.window_ms - now_ms
+        return Decision(False, 0, _seconds(next_fits_in_ms), None)
+    reset_s = _seconds(tat_ms - now_ms) if tat_ms > now_ms else 0
+    return Decision(True, remaining, reset_s, None)
+
+
+def gcra_refund(policy: RatePolicy, stored_tat_ms: int) -> int:
+    """TAT after giving one spent request back; a TAT in the past means a full budget."""
+    return stored_tat_ms - policy.emission_ms
+
+
 def _seconds(duration_ms: int) -> int:
     return max(1, math.ceil(duration_ms / 1000))
 
@@ -100,23 +116,106 @@ class RateLimiter:
 
     async def hit(self, policy: RatePolicy, subject: str) -> Decision:
         """Spend one request; fails closed (denied) if the key stays contended."""
-        key = f"rl:{policy.name}:{subject}"
+
+        def step(stored_tat_ms: int | None, now_ms: int) -> tuple[Decision, int | None]:
+            decision = gcra(policy, stored_tat_ms, now_ms)
+            return decision, decision.new_tat_ms
+
+        decision = await self._transact(_key(policy, subject), step)
+        return decision or Decision(False, 0, 1, None)
+
+    async def peek(self, policy: RatePolicy, subject: str) -> Decision:
+        raw = await self._redis.get(_key(policy, subject))
+        return gcra_peek(policy, int(raw) if raw else None, _now_ms())
+
+    async def refund(self, policy: RatePolicy, subject: str) -> None:
+        """Give back a request spent by `hit` for an operation that did not happen."""
+
+        def step(stored_tat_ms: int | None, _now_ms: int) -> tuple[None, int | None]:
+            if stored_tat_ms is None:
+                return None, None
+            return None, gcra_refund(policy, stored_tat_ms)
+
+        await self._transact(_key(policy, subject), step)
+
+    async def _transact[T](
+        self, key: str, step: Callable[[int | None, int], tuple[T, int | None]]
+    ) -> T | None:
+        """Read the TAT, compute, write back atomically (WATCH/MULTI); None if contended.
+
+        `step` returns the result and the TAT to store: None keeps the key as is, a TAT that is
+        not in the future deletes it.
+        """
         async with self._redis.pipeline(transaction=True) as pipe:
             for _ in range(_MAX_WATCH_RETRIES):
                 try:
                     await pipe.watch(key)
                     raw = await pipe.get(key)
-                    now_ms = time.time_ns() // 1_000_000
-                    decision = gcra(policy, int(raw) if raw else None, now_ms)
-                    if decision.new_tat_ms is None:
-                        return decision  # leaving the pipeline context resets the WATCH
+                    now_ms = _now_ms()
+                    result, new_tat_ms = step(int(raw) if raw else None, now_ms)
+                    if new_tat_ms is None:
+                        return result  # leaving the pipeline context resets the WATCH
                     pipe.multi()  # type: ignore[no-untyped-call]  # unannotated in redis-py 8
-                    pipe.set(key, decision.new_tat_ms, px=decision.new_tat_ms - now_ms)
+                    if new_tat_ms > now_ms:
+                        pipe.set(key, new_tat_ms, px=new_tat_ms - now_ms)
+                    else:
+                        pipe.delete(key)
                     await pipe.execute()
-                    return decision
+                    return result
                 except WatchError:
                     continue
-        return Decision(False, 0, 1, None)
+        return None
+
+
+class RateBudget:
+    """A budget spent only when the operation is accepted (see `deferred_rate_limit`)."""
+
+    def __init__(
+        self, request: Request, policy: RatePolicy, subject: str | None, limiter: RateLimiter
+    ) -> None:
+        self._request = request
+        self._policy = policy
+        self._subject = subject
+        self._limiter = limiter
+        self._spent = False
+
+    async def consume(self) -> None:
+        """Spend one request at the accept point; 429 `rate_limited` if none is left."""
+        if self._subject is None:
+            return
+        decision = await self._limiter.hit(self._policy, self._subject)
+        _publish(self._request, self._policy, decision)
+        if not decision.allowed:
+            raise _rate_limited(decision)
+        self._spent = True
+
+    async def refund(self) -> None:
+        """Undo `consume` when the accepted operation failed before it took effect."""
+        if self._spent and self._subject is not None:
+            await self._limiter.refund(self._policy, self._subject)
+            self._spent = False
+
+
+def deferred_rate_limit(policy: RatePolicy) -> Callable[[Request], Awaitable[RateBudget]]:
+    """Endpoint parameter for operations whose rejections must not cost budget.
+
+    Declare it before the session parameter so its headers reach every answer. It spends and
+    rejects nothing itself: a request is judged on its preconditions first (401, 403, 412,
+    428), and 429 comes only from `consume()` at the accept point.
+    """
+
+    async def dependency(request: Request) -> RateBudget:
+        subject = _budget_subject(request, policy)
+        limiter: RateLimiter = request.app.state.rate_limiter
+        decision = (
+            await limiter.peek(policy, subject)
+            if subject is not None
+            else Decision(True, policy.quota, 0, None)
+        )
+        _publish(request, policy, decision)
+        return RateBudget(request, policy, subject, limiter)
+
+    return dependency
 
 
 def rate_limit(policy: RatePolicy) -> Callable[[Request], Awaitable[None]]:
@@ -127,38 +226,57 @@ def rate_limit(policy: RatePolicy) -> Callable[[Request], Awaitable[None]]:
     """
 
     async def dependency(request: Request) -> None:
-        subject = _subject(request, policy)
-        if subject is None or not request.app.state.settings.rate_limits_enabled:
-            # Without a session authentication answers 401 before any database work, so there
-            # is nothing to spend; the headers still describe the policy.
+        subject = _budget_subject(request, policy)
+        if subject is None:
             decision = Decision(True, policy.quota, 0, None)
         else:
             limiter: RateLimiter = request.app.state.rate_limiter
             decision = await limiter.hit(policy, subject)
-        setattr(
-            request.state,
-            RATE_LIMIT_HEADERS_STATE,
-            {
-                "RateLimit-Policy": policy.header,
-                "RateLimit": f'"{policy.name}";r={decision.remaining};t={decision.reset_s}',
-            },
-        )
+        _publish(request, policy, decision)
         if not decision.allowed:
-            raise ProblemError(
-                ErrorCode.RATE_LIMITED, headers={"Retry-After": str(decision.reset_s)}
-            )
+            raise _rate_limited(decision)
 
     return dependency
 
 
-def _subject(request: Request, policy: RatePolicy) -> str | None:
-    """Budget key; None for a session policy without a session cookie."""
+def cookie_subject(cookie: str) -> str:
+    """Budget key of a session cookie (the session itself is resolved only after the limit)."""
+    return "s:" + hashlib.sha256(cookie.encode()).hexdigest()[:32]
+
+
+def _budget_subject(request: Request, policy: RatePolicy) -> str | None:
+    """Budget key; None when nothing is spent: limits switched off, or a session policy
+    without a cookie (authentication answers 401 before any database work)."""
+    if not request.app.state.settings.rate_limits_enabled:
+        return None
     if policy.subject is Subject.IP:
         return "ip:" + client_network(request)
-    # Keyed by a hash of the cookie, not the resolved session: the limit runs before
-    # authentication, so a forged cookie spends its own budget and then gets 401.
+    # A forged cookie spends its own budget and then gets 401.
     cookie = request.cookies.get(SESSION_COOKIE)
-    return "s:" + hashlib.sha256(cookie.encode()).hexdigest()[:32] if cookie else None
+    return cookie_subject(cookie) if cookie else None
+
+
+def _publish(request: Request, policy: RatePolicy, decision: Decision) -> None:
+    setattr(
+        request.state,
+        RATE_LIMIT_HEADERS_STATE,
+        {
+            "RateLimit-Policy": policy.header,
+            "RateLimit": f'"{policy.name}";r={decision.remaining};t={decision.reset_s}',
+        },
+    )
+
+
+def _rate_limited(decision: Decision) -> ProblemError:
+    return ProblemError(ErrorCode.RATE_LIMITED, headers={"Retry-After": str(decision.reset_s)})
+
+
+def _key(policy: RatePolicy, subject: str) -> str:
+    return f"rl:{policy.name}:{subject}"
+
+
+def _now_ms() -> int:
+    return time.time_ns() // 1_000_000
 
 
 def client_network(request: Request) -> str:

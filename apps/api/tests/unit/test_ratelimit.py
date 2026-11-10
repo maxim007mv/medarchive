@@ -1,6 +1,15 @@
 import pytest
 
-from app.core.ratelimit import GENERAL, SESSIONS_CREATE, RatePolicy, Subject, gcra
+from app.core.ratelimit import (
+    GENERAL,
+    SESSIONS_CREATE,
+    WORKSPACE_DELETE,
+    RatePolicy,
+    Subject,
+    gcra,
+    gcra_peek,
+    gcra_refund,
+)
 
 NOW = 1_794_300_000_000  # Unix ms
 
@@ -50,6 +59,43 @@ def test_reset_counts_seconds_to_full_quota() -> None:
 
     assert decision.remaining == 299
     assert decision.reset_s == 1  # 60 s / 300 requests = 0.2 s, rounded up
+
+
+def test_peek_reports_budget_without_spending() -> None:
+    fresh = gcra_peek(WORKSPACE_DELETE, None, NOW)
+    spent_tat = gcra(WORKSPACE_DELETE, None, NOW).new_tat_ms
+    spent = gcra_peek(WORKSPACE_DELETE, spent_tat, NOW + 60_000)
+
+    assert (fresh.allowed, fresh.remaining, fresh.reset_s, fresh.new_tat_ms) == (True, 1, 0, None)
+    assert (spent.allowed, spent.remaining, spent.reset_s) == (False, 0, 3540)
+    assert spent.new_tat_ms is None
+
+
+def test_peek_agrees_with_hit_on_partly_used_quota() -> None:
+    tat = _burst(SESSIONS_CREATE, 3, NOW)
+
+    assert gcra_peek(SESSIONS_CREATE, tat, NOW).remaining == 2
+    assert gcra(SESSIONS_CREATE, tat, NOW).remaining == 1
+
+
+def test_refund_returns_the_spent_request() -> None:
+    tat = _burst(SESSIONS_CREATE, 5, NOW)
+
+    assert tat is not None
+    refunded = gcra_refund(SESSIONS_CREATE, tat)
+
+    assert gcra(SESSIONS_CREATE, refunded, NOW).allowed
+    assert not gcra(SESSIONS_CREATE, tat, NOW).allowed
+
+
+def test_refund_of_the_only_request_restores_the_full_budget() -> None:
+    tat = gcra(WORKSPACE_DELETE, None, NOW).new_tat_ms
+    assert tat is not None
+
+    refunded = gcra_refund(WORKSPACE_DELETE, tat)
+
+    assert refunded <= NOW
+    assert gcra_peek(WORKSPACE_DELETE, refunded, NOW).remaining == 1
 
 
 @pytest.mark.parametrize(

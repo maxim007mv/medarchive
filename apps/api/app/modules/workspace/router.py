@@ -8,7 +8,14 @@ from app.core.crypto import Kek
 from app.core.deps import Db, Scope, SessionContext, get_kek, require_scope
 from app.core.errors import problem_responses
 from app.core.idempotency import require_idempotency_key
-from app.core.ratelimit import ACCESS_KEY_ROTATE, GENERAL, WORKSPACE_DELETE, rate_limit
+from app.core.ratelimit import (
+    ACCESS_KEY_ROTATE,
+    GENERAL,
+    WORKSPACE_DELETE,
+    RateBudget,
+    deferred_rate_limit,
+    rate_limit,
+)
 from app.modules.auth.router import clear_session_cookie, request_meta
 from app.modules.workspace import service
 from app.modules.workspace.schemas import (
@@ -48,15 +55,19 @@ async def get_workspace(response: Response, db: Db, session: ReadSession) -> Wor
     status_code=status.HTTP_202_ACCEPTED,
     response_model=DeletionScheduled,
     responses=problem_responses(401, 403, 412, 428, 429, 500),
-    dependencies=[Depends(rate_limit(WORKSPACE_DELETE))],
 )
 async def delete_workspace(
-    request: Request, response: Response, db: Db, session: ManageSession
+    request: Request,
+    response: Response,
+    # Before the session: its headers must reach 401 and 403 answers too.
+    budget: Annotated[RateBudget, Depends(deferred_rate_limit(WORKSPACE_DELETE))],
+    db: Db,
+    session: ManageSession,
 ) -> DeletionScheduled:
     # Read from the raw headers: a declared required header would add a 422 the contract
     # does not have; a missing If-Match is 428.
     purge_before = await service.delete_workspace(
-        db, session, request.headers.get("If-Match"), request_meta(request).ip_prefix
+        db, session, request.headers.get("If-Match"), request_meta(request).ip_prefix, budget
     )
     clear_session_cookie(response)
     return DeletionScheduled(purge_before=purge_before)
