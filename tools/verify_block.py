@@ -35,15 +35,21 @@ LOG_ROOT = Path(os.environ.get("GATE_LOGS", "/tmp/medarchive-gate-logs"))
 BLOCKS_MD = REPO / "docs/progress/blocks.md"
 
 PROJECT = "medarchive_qa"
+# The browser goes through the `tls` profile: WebKit keeps the Secure session cookie only on https
+# (ADR-048 fallback), and storage is https too so uploads are not mixed content.
 STACK_ENV = {
     "COMPOSE_PROJECT_NAME": PROJECT,
+    "COMPOSE_PROFILES": "tls",
     "WEB_PORT": "3400",
     "API_PORT": "8900",
     "MINIO_PORT": "9400",
     "MINIO_CONSOLE_PORT": "9401",
+    "TLS_WEB_PORT": "3444",
+    "TLS_STORAGE_PORT": "9444",
+    "S3_PUBLIC_ENDPOINT": "https://localhost:9444",
     "IMAGE_TAG": "qa",
 }
-WEB_URL = "http://localhost:3400"
+WEB_URL = "https://localhost:3444"
 API_URL = "http://localhost:8900"
 POLICY_VERSION = "2026-11-10"
 XSS_TITLE = "<img src=x onerror=alert(1)>"
@@ -638,7 +644,7 @@ def report_markdown(gate: Gate, sha: str, subject: str, required: list[str], pas
     lines = [
         f"#### Прогон {now}, `{sha[:7]}`: {'PASS' if passed else 'FAIL'}",
         "",
-        f"Коммит `{sha[:7]}` «{subject}». Стек `{PROJECT}` (web :3400, api :8900, minio :9400), "
+        f"Коммит `{sha[:7]}` «{subject}». Стек `{PROJECT}` (браузер `{WEB_URL}`, api :8900), "
         f"логи `{gate.logs}`. Команда `tools/verify_block.sh {gate.block}`.",
         "",
         "| Шаг | Блокирует | Итог | Подробности | с |",
