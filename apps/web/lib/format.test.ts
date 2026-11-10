@@ -75,7 +75,8 @@ describe("titleFromFileName", () => {
     ["2026_05_21  lipidogramma.PDF", "Lipidogramma"],
     ["общий_анализ крови.pdf", "Общий анализ крови"],
     ["ЭКГ покоя", "ЭКГ покоя"],
-    ["20260408.pdf", ""],
+    ["20260408.pdf", "Документ"],
+    ["01-_ .pdf", "Документ"],
   ])("%s → «%s»", (fileName, expected) => {
     expect(titleFromFileName(fileName)).toBe(expected);
   });

@@ -48,12 +48,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const dismiss = (id: number) => setToasts((shown) => shown.filter((toast) => toast.id !== id));
 
   return (
-    // Radix needs a non-empty label for the region and the announcement prefix, and its defaults
-    // are English. The dictionary has no toast-region text yet, so the product name is used.
+    // Radix needs a non-empty label for the region and the announcement prefix; its defaults are English.
     <RadixToast.Provider
       duration={DEFAULT_DURATION_MS}
       swipeDirection="down"
-      label={texts["app.name"]}
+      label={texts["toast.region"]}
     >
       <ShowToastContext value={show}>{children}</ShowToastContext>
       {toasts.map((toast) => (
@@ -79,7 +78,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       ))}
       {isClient && (
         <RadixToast.Viewport
-          label={texts["app.name"]}
+          label={texts["toast.region"]}
           className="pb-safe fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 px-4 outline-hidden md:pb-8"
         />
       )}

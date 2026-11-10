@@ -1,5 +1,7 @@
 // Number, date and name formats from docs/texts.md, section 2.
 
+import { texts } from "./texts";
+
 /** Between a number and its unit (docs/texts.md, section 1). */
 const NBSP = "\u00a0";
 const DEFAULT_TIME_ZONE = "Europe/Moscow";
@@ -50,7 +52,7 @@ export function formatSize(bytes: number): string {
 /**
  * Default document title from a file name (FE-12): without `.pdf` and leading digits, `-`
  * and `_` read as spaces, first letter capital. «01-general-blood-test.pdf» → «General blood
- * test». A name of digits only gives an empty title, and the form asks for one.
+ * test». A name of digits and separators only gives «Документ» (`upload.name.fallback`).
  */
 export function titleFromFileName(fileName: string): string {
   const words = fileName
@@ -58,6 +60,7 @@ export function titleFromFileName(fileName: string): string {
     .replace(/^[\d\s_-]+/, "")
     .replace(/[\s_-]+/g, " ")
     .trim();
+  if (!words) return texts["upload.name.fallback"];
   return words.charAt(0).toLocaleUpperCase("ru-RU") + words.slice(1);
 }
 

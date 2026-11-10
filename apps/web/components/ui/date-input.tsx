@@ -85,6 +85,7 @@ export function DateInput({ value, onChange, max, disabled, className, ...props 
         <Popover.Content
           align="start"
           sideOffset={6}
+          aria-label={texts["calendar.dialog"]}
           // Start on the grid's current day. Here, not in Calendar's mount effect: by now Radix
           // has paused the focus trap of an enclosing dialog, which would pull focus back.
           onOpenAutoFocus={(event) => {
@@ -165,18 +166,14 @@ function Calendar({
     event.preventDefault();
   }
 
-  const previousMonth = addMonths(active, -1);
-  const nextMonth = addMonths(active, 1);
-
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        {/* No dictionary text for "previous/next month" yet: the target month names the button. */}
         <IconButton
           size="sm"
           icon={ChevronLeft}
-          aria-label={monthYearFormat.format(previousMonth)}
-          onClick={() => setActive(previousMonth)}
+          aria-label={texts["calendar.prevMonth"]}
+          onClick={() => setActive(addMonths(active, -1))}
         />
         <p aria-live="polite" className="text-label first-letter:uppercase">
           {monthYearFormat.format(active)}
@@ -184,8 +181,8 @@ function Calendar({
         <IconButton
           size="sm"
           icon={ChevronRight}
-          aria-label={monthYearFormat.format(nextMonth)}
-          onClick={() => setActive(nextMonth)}
+          aria-label={texts["calendar.nextMonth"]}
+          onClick={() => setActive(addMonths(active, 1))}
         />
       </div>
       <table ref={gridRef} className="border-collapse" onKeyDown={handleKeyDown}>
