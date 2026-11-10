@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 
+from app.core.client import client_ip
 from app.core.crypto import Kek
 from app.core.deps import (
     OWNER_SCOPES,
@@ -142,14 +143,11 @@ def request_meta(request: Request) -> service.RequestMeta:
 
 def _ip_prefix(request: Request) -> IpPrefix | None:
     """Audit keeps /24 of IPv4 and /48 of IPv6 (07-database, section 9)."""
-    if request.client is None:
+    address = client_ip(request)
+    if address is None:
         return None
-    try:
-        network = ip_network(request.client.host)
-    except ValueError:
-        return None
-    prefix = 24 if network.version == 4 else 48
-    return network.supernet(new_prefix=prefix)
+    prefix = 24 if address.version == 4 else 48
+    return ip_network(address).supernet(new_prefix=prefix)
 
 
 def _csrf_secret(request: Request) -> str:

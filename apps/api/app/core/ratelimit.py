@@ -17,6 +17,7 @@ from fastapi import Request
 from redis.asyncio import Redis
 from redis.exceptions import WatchError
 
+from app.core.client import client_ip
 from app.core.errors import ErrorCode, ProblemError
 from app.core.middleware import RATE_LIMIT_HEADERS_STATE
 from app.core.security import SESSION_COOKIE
@@ -127,8 +128,9 @@ def rate_limit(policy: RatePolicy) -> Callable[[Request], Awaitable[None]]:
 
     async def dependency(request: Request) -> None:
         subject = _subject(request, policy)
-        if subject is None:
-            # No session to spend: authentication answers 401 before any database work.
+        if subject is None or not request.app.state.settings.rate_limits_enabled:
+            # Without a session authentication answers 401 before any database work, so there
+            # is nothing to spend; the headers still describe the policy.
             decision = Decision(True, policy.quota, 0, None)
         else:
             limiter: RateLimiter = request.app.state.rate_limiter
@@ -161,11 +163,9 @@ def _subject(request: Request, policy: RatePolicy) -> str | None:
 
 def client_network(request: Request) -> str:
     """Client address; IPv6 clients are grouped by /64 (06-api-contract, section 7)."""
-    host = request.client.host if request.client else "unknown"
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return host
+    address = client_ip(request)
+    if address is None:
+        return "unknown"
     if address.version == 6:
         return str(ipaddress.ip_network(f"{address}/64", strict=False))
     return str(address)
