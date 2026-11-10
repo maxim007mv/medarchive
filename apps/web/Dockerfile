@@ -13,6 +13,10 @@ ARG API_ORIGIN=http://api:8000
 RUN API_ORIGIN="$API_ORIGIN" pnpm --filter web build
 
 FROM node:22-alpine
+# The server needs only `node`; the bundled npm, corepack and yarn carry their own vulnerable
+# dependencies (OPS-05: Trivy without fixable HIGH).
+RUN rm -rf /usr/local/lib/node_modules /opt/yarn-* \
+  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 WORKDIR /app
 COPY --from=build /app/apps/web/.next/standalone ./
