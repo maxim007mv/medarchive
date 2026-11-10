@@ -649,13 +649,29 @@ def zap(done: subprocess.CompletedProcess[str], report: Path) -> tuple[bool, str
 
 
 def run_k6(gate: Gate) -> None:
+    report = gate.logs / "k6-summary.json"
     gate.make(
         "k6 GET /documents p95 < 300 ms, 50 VU, 1000 docs",
         "load",
         blocking=True,
-        summarize=last_line,
+        summarize=lambda done: k6(done, report),
         COMPOSE_PROJECT=PROJECT,
     )
+
+
+def k6(done: subprocess.CompletedProcess[str], report: Path) -> tuple[bool, str]:
+    """Exit code (k6 fails on a crossed threshold) and the measured values behind the thresholds."""
+    if not report.exists():
+        return False, f"no summary (exit {done.returncode}) {done.stderr.strip()[-200:]}"
+    metrics = read_json(report)["metrics"]
+    found = []
+    for name in ("documents.list", "documents.search"):
+        duration = metrics.get(f"http_req_duration{{name:{name}}}", {})
+        found.append(f"{name} p95 {duration.get('p(95)', float('nan')):.0f} ms")
+    found.append(f"5xx rate {metrics.get('server_errors', {}).get('value', float('nan')):.4f}")
+    found.append(f"checks {metrics.get('checks', {}).get('value', float('nan')):.4f}")
+    found.append(f"requests {metrics.get('http_reqs', {}).get('count', 0)}")
+    return done.returncode == 0, ", ".join(found)
 
 
 # Record ------------------------------------------------------------------------------------
