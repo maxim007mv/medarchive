@@ -89,7 +89,8 @@ class Gate:
     logs: Path
     steps: list[Step] = field(default_factory=list)
     results: list[TestResult] = field(default_factory=list)
-    pending_e2e: int = 0
+    # E2E tests tagged with later blocks; None when the E2E step did not run.
+    pending_e2e: int | None = None
 
     def run(
         self,
@@ -126,6 +127,7 @@ class Gate:
 
     def record(self, name: str, blocking: bool, ok: bool, detail: str, started: float) -> None:
         status = "pass" if ok else "fail"
+        detail = " ".join(detail.split())[:400]  # one table row
         self.steps.append(Step(name, blocking, status, detail, time.monotonic() - started))
         print(f"[{status}] {name}: {detail}", flush=True)
 
@@ -329,7 +331,8 @@ def stack_state(done: subprocess.CompletedProcess[str]) -> tuple[bool, str]:
     services = [json.loads(line) for line in listing.splitlines() if line.strip()]
     states = {s["Service"]: s["Health"] or f"{s['State']}({s['ExitCode']})" for s in services}
     healthy = done.returncode == 0 and all(v in ("healthy", "exited(0)") for v in states.values())
-    return healthy, ", ".join(f"{name} {state}" for name, state in sorted(states.items()))
+    services_state = ", ".join(f"{name} {state}" for name, state in sorted(states.items()))
+    return healthy, f"exit {done.returncode}; {services_state or 'no containers'}"
 
 
 def run_stack(gate: Gate) -> bool:
@@ -391,7 +394,7 @@ def run_e2e(gate: Gate) -> None:
         check=False,
     ).stdout
     found = re.search(r"Total: (\d+) tests?", listing)
-    gate.pending_e2e = int(found.group(1)) if found else 0
+    gate.pending_e2e = int(found.group(1)) if found else None
 
 
 def run_schemathesis(gate: Gate) -> None:
@@ -499,12 +502,14 @@ def run_supply_chain(gate: Gate) -> None:
         blocking=blocking,
         summarize=lambda done: gitleaks(done, reports / "gitleaks.json"),
     )
+    # The images we ship block; raw base images are reported only: the web image removes npm,
+    # where all fixable findings of node:22-alpine live (D-004).
     for image in ["medarchive/api:qa", "medarchive/web:qa", *BASE_IMAGES]:
         report = reports / f"trivy-{image.replace('/', '-').replace(':', '-')}.json"
         gate.make(
             f"trivy {image} (OPS-04, OPS-05)",
             "trivy",
-            blocking=blocking,
+            blocking=blocking and image not in BASE_IMAGES,
             summarize=partial(trivy, report=report),
             IMAGE=image,
         )
@@ -624,11 +629,8 @@ def report_markdown(gate: Gate, sha: str, subject: str, required: list[str], pas
             tests = by_tc.get(tc, [])
             sources = ", ".join(sorted({f"{t.source} {t.status}" for t in tests})) or "-"
             lines.append(f"| {tc} | {verdict(tests)} | {sources} |")
-    lines += [
-        "",
-        f"E2E-тесты блоков после {gate.block} (pending, не запускались): {gate.pending_e2e}.",
-        "",
-    ]
+    pending = "не посчитаны, E2E не запускался" if gate.pending_e2e is None else gate.pending_e2e
+    lines += ["", f"E2E-тесты блоков после {gate.block} (pending, не запускались): {pending}.", ""]
     return "\n".join(lines)
 
 
