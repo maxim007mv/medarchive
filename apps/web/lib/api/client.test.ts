@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { api, call, csrfHeader, request, setCsrfToken } from "./client";
 import { useIsOnline } from "./connectivity";
-import { ApiError, NetworkError, pointerToField, problemTitle } from "./errors";
+import { ApiError, isApiError, NetworkError, pointerToField, problemTitle } from "./errors";
 
 const problem = (code: string, status: number, title = "Заголовок") => ({
   type: `urn:problem-type:medarchive:${code}`,
@@ -62,6 +62,20 @@ describe("request", () => {
     await expect(call(api.GET("/api/v1/session"))).rejects.toBeInstanceOf(NetworkError);
   });
 
+  test("other thrown errors are not hidden as network errors", async () => {
+    fetchMock.mockRejectedValue(new RangeError("bug"));
+
+    await expect(call(api.GET("/api/v1/session"))).rejects.toBeInstanceOf(RangeError);
+  });
+
+  test("Retry-After that is not a number gives no countdown", async () => {
+    fetchMock.mockResolvedValue(
+      respond(429, problem("rate_limited", 429), { "Retry-After": "soon" }),
+    );
+
+    await expect(call(api.GET("/api/v1/session"))).rejects.toMatchObject({ retryAfterSec: null });
+  });
+
   test("a failed fetch is a NetworkError", async () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
 
@@ -115,6 +129,21 @@ describe("problem helpers", () => {
     expect(problemTitle(rateLimited as never, 12)).toBe(
       "Слишком много действий подряд. Повторите через 12 с",
     );
+  });
+
+  test("without a countdown the title is shown as is", () => {
+    const rateLimited = problem("rate_limited", 429, "Повторите через N с");
+
+    expect(problemTitle(rateLimited as never, null)).toBe("Повторите через N с");
+  });
+
+  test("isApiError checks the code when asked", () => {
+    const error = new ApiError(problem("not_found", 404) as never, null);
+
+    expect(isApiError(error)).toBe(true);
+    expect(isApiError(error, "not_found")).toBe(true);
+    expect(isApiError(error, "version_conflict")).toBe(false);
+    expect(isApiError(new Error("x"))).toBe(false);
   });
 
   test("pointer names the form field", () => {

@@ -94,6 +94,38 @@ describe("postToStorage", () => {
     expect(progress).toEqual([62]);
   });
 
+  test("progress without a known total is ignored", async () => {
+    vi.stubGlobal("XMLHttpRequest", FakeXhr);
+    const progress: number[] = [];
+    const done = postToStorage(
+      upload,
+      pdf(),
+      (p) => progress.push(p),
+      new AbortController().signal,
+    );
+
+    FakeXhr.last.upload.onprogress?.({
+      lengthComputable: false,
+      loaded: 5,
+      total: 0,
+    } as ProgressEvent);
+    FakeXhr.last.status = 204;
+    FakeXhr.last.onload?.();
+    await done;
+
+    expect(progress).toEqual([]);
+  });
+
+  test("aborting the signal aborts the transfer", async () => {
+    vi.stubGlobal("XMLHttpRequest", FakeXhr);
+    const controller = new AbortController();
+    const done = postToStorage(upload, pdf(), () => undefined, controller.signal);
+
+    controller.abort();
+
+    await expect(done).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   test("a dropped connection is a NetworkError", async () => {
     vi.stubGlobal("XMLHttpRequest", FakeXhr);
     const done = postToStorage(upload, pdf(), () => undefined, new AbortController().signal);
