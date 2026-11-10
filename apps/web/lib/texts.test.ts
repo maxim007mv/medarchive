@@ -25,6 +25,12 @@ test("placeholders are filled by name", () => {
   expect(t("common.cancel")).toBe("Отмена");
 });
 
+test("a missing value leaves its placeholder visible instead of «undefined»", () => {
+  const params = {} as Parameters<typeof t<"chip.remove">>[1];
+
+  expect(t("chip.remove", params)).toBe("Убрать фильтр «{chip}»");
+});
+
 test("all error codes of the catalog are present", () => {
   expect(Object.keys(errorTitles)).toHaveLength(32);
   expect(errorTitles.date_invalid).toBe("Такой даты нет. Проверьте день и месяц");
