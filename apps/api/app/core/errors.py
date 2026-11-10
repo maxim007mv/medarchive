@@ -12,7 +12,9 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Match
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 PROBLEM_TYPE_PREFIX = "urn:problem-type:medarchive:"
@@ -262,9 +264,28 @@ def install_error_handlers(app: FastAPI) -> None:
         request_id = request_id_of(request)
         if exc.status_code == 404:
             return problem_response(ErrorCode.NOT_FOUND, request_id)
+        # FastAPI raises 400 for a body it cannot decode; the contract calls any malformed
+        # input 422 validation_error. Our own 400s are ProblemError and never reach here.
+        if exc.status_code == 400:
+            return problem_response(ErrorCode.VALIDATION_ERROR, request_id)
+        headers = dict(exc.headers or {})
+        if exc.status_code == 405:
+            headers["Allow"] = _allowed_methods(app, request)
         code = ErrorCode.VALIDATION_ERROR if exc.status_code < 500 else ErrorCode.INTERNAL
         body = problem_body(code, request_id)
         body["status"] = exc.status_code
         return JSONResponse(
-            body, status_code=exc.status_code, media_type=PROBLEM_MEDIA_TYPE, headers=exc.headers
+            body, status_code=exc.status_code, media_type=PROBLEM_MEDIA_TYPE, headers=headers
         )
+
+
+def _allowed_methods(app: FastAPI, request: Request) -> str:
+    # Starlette's 405 lists only the methods of the first route with this path, but GET and
+    # DELETE /api/v1/workspace are two routes.
+    methods = {
+        method
+        for route in app.routes
+        if isinstance(route, APIRoute) and route.matches(request.scope)[0] is not Match.NONE
+        for method in route.methods or ()
+    }
+    return ", ".join(sorted(methods))

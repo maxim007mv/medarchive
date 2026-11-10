@@ -81,6 +81,14 @@ def _app() -> FastAPI:
     async def crash() -> None:
         raise RuntimeError("SELECT ... 'Общий анализ крови'")
 
+    @app.get("/resource")
+    async def read_resource() -> None:
+        return None
+
+    @app.delete("/resource")
+    async def delete_resource() -> None:
+        return None
+
     return app
 
 
@@ -117,6 +125,15 @@ async def test_validation_error_points_to_fields_without_values(client: AsyncCli
     assert "заметка" not in response.text
 
 
+async def test_undecodable_body_is_validation_error(client: AsyncClient) -> None:
+    response = await client.post(
+        "/validate", content=b"?\xff", headers={"Content-Type": "application/json"}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+
+
 async def test_unhandled_error_is_internal_without_trace(client: AsyncClient) -> None:
     response = await client.get("/crash")
 
@@ -134,6 +151,16 @@ async def test_unknown_route_is_not_found_problem(client: AsyncClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
+
+
+async def test_method_not_allowed_lists_methods_of_every_route_on_the_path(
+    client: AsyncClient,
+) -> None:
+    response = await client.options("/resource")
+
+    assert response.status_code == 405
+    assert response.headers["allow"] == "DELETE, GET"
+    assert response.json()["status"] == 405
 
 
 async def test_request_id_is_generated_or_taken_when_well_formed(client: AsyncClient) -> None:
