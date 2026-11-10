@@ -1,10 +1,15 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
-/** Regions whose pixels are not the application's: the browser PDF viewer and live caret/progress. */
+/**
+ * Regions that differ between runs for reasons outside the UI: the browser's own PDF viewer,
+ * live progress, and upload moments, which the server stamps with its real clock.
+ */
 function unstableRegions(page: Page): Locator[] {
   return [
     page.locator('iframe[title^="PDF"], object[type="application/pdf"], embed[type="application/pdf"]'),
     page.locator('[role="progressbar"]'),
+    page.getByText(/^\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/),
+    page.getByText(/^Загружен \d{2}\.\d{2}\.\d{4}/),
   ];
 }
 

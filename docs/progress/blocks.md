@@ -102,7 +102,9 @@ E2E-тесты блоков после 1 (pending, не запускались):
 
 ### Дефекты
 
-Нет.
+| ID | Класс | Владелец | Что | Шаги | Ожидаемо | Фактически | Статус |
+|---|---|---|---|---|---|---|---|
+| D-011 | окружение, ломает E2E всех стеков | BACKEND-CORE, BACKEND-DOCUMENTS, DB | Утечка контейнеров Testcontainers: 10.11.2026 23:40 запущено 40 контейнеров с меткой `org.testcontainers=true` (33 `pgsty/minio`, 5 `postgres:17-alpine`, 2 `redis:7-alpine`), старшим около 50 минут. Фикстуры сессии останавливают контейнер только при нормальном завершении pytest, а прогоны идут с `TESTCONTAINERS_RYUK_DISABLED=true` (`docs/progress/backend-core.md`), поэтому прерванный прогон оставляет контейнеры навсегда | `docker ps --filter label=org.testcontainers=true`; `docker run --rm alpine free -m` | После прогонов контейнеров Testcontainers нет | В виртуальной машине Docker 6,8 из 7,8 ГБ занято, swap 1 из 1 ГБ; ядро убивает по OOM `api` и `minio` стенда E2E (`OOMKilled=true`, код 137) посреди прогона, тесты падают с 502 и 503 `storage_unavailable`. Нужно: не отключать Ryuk (с `36acdc6` Makefile задаёт `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`, Ryuk на Docker Desktop работает), гонять тесты через `make test-api`; когда ни один прогон не идёт, убрать утёкшие: `docker rm -f $(docker ps -q --filter label=org.testcontainers=true)`. Чужие контейнеры агент QA не останавливает | открыт |
 
 ## Блок 3
 
