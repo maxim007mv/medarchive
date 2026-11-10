@@ -75,6 +75,7 @@ function classProblem(token) {
   return null;
 }
 
+/** @type {import("eslint").Rule.RuleModule} */
 const noHexColor = {
   meta: {
     type: "problem",
@@ -91,6 +92,7 @@ const noHexColor = {
   },
 };
 
+/** @type {import("eslint").Rule.RuleModule} */
 const tailwindTokens = {
   meta: {
     type: "problem",
