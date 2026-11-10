@@ -42,6 +42,9 @@ from app.storage.s3 import Bucket, ObjectStorage, StorageUnavailableError, Store
 
 BATCH_SIZE = 500
 DELETED_DOCUMENT_GRACE = timedelta(hours=24)
+# An expired upload still answers 410 upload_expired for a day, as long as its quarantine object
+# lives (lifecycle rule of ma-quarantine), so the client learns why instead of seeing 404.
+EXPIRED_UPLOAD_GRACE = timedelta(hours=24)
 ORPHAN_MIN_AGE = timedelta(hours=1)
 # Bound on due-workspace rounds per run, so a workspace that never empties cannot spin forever.
 MAX_ROUNDS = 100
@@ -218,14 +221,17 @@ class Purger:
             purged += len(ids)
 
     async def _purge_expired_uploads(self, workspace_id: UUID, report: PurgeReport) -> int:
-        """Rows past `expires_at` and their quarantine objects, if the browser ever sent one."""
+        """Rows a day past `expires_at` and their quarantine objects, if the browser sent one."""
         purged = 0
         while True:
             async with self._sessions() as db, workspace_tx(db, workspace_id):
                 rows = (
                     await db.execute(
                         select(Upload.id, Upload.quarantine_key)
-                        .where(Upload.workspace_id == workspace_id, Upload.expires_at <= func.now())
+                        .where(
+                            Upload.workspace_id == workspace_id,
+                            Upload.expires_at <= func.now() - EXPIRED_UPLOAD_GRACE,
+                        )
                         .limit(BATCH_SIZE)
                     )
                 ).all()

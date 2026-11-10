@@ -14,9 +14,10 @@ from documents_support import (
 )
 from pypdf import PdfReader, PdfWriter
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.storage.s3 import ObjectStorage
+from app.workers.purge import Purger
 
 MAX_BYTES = 20_971_520
 
@@ -133,25 +134,55 @@ async def test_upload_of_another_archive_is_not_found(api: Api) -> None:
     assert response.json()["code"] == "upload_not_found"
 
 
-async def test_upload_older_than_an_hour_is_expired(
-    api: Api, superuser_engine: AsyncEngine
+async def _expire(superuser: AsyncEngine, upload_id: str, hours_ago: int) -> None:
+    async with superuser.begin() as connection:
+        await connection.execute(
+            text(
+                "UPDATE app.uploads SET created_at = now() - make_interval(hours => :hours + 1),"
+                " expires_at = now() - make_interval(hours => :hours) WHERE id = :id"
+            ),
+            {"id": upload_id, "hours": hours_ago},
+        )
+
+
+async def test_upload_past_its_hour_stays_410_for_a_day_after_purge(
+    api: Api,
+    superuser_engine: AsyncEngine,
+    worker_sessions: async_sessionmaker[AsyncSession],
+    storage: ObjectStorage,
 ) -> None:
     source = SOURCES[0]
     async with api.client() as client:
         created = await create_archive(client)
         upload_id = await upload(client, created, source.path.read_bytes(), source.path.name)
-        async with superuser_engine.begin() as connection:
-            await connection.execute(
-                text(
-                    "UPDATE app.uploads SET created_at = now() - interval '2 hours',"
-                    " expires_at = now() - interval '1 hour' WHERE id = :id"
-                ),
-                {"id": upload_id},
-            )
+        await _expire(superuser_engine, upload_id, hours_ago=2)
+        await Purger(worker_sessions, storage).run_once()
         response = await create_document(client, created, upload_id)
 
     assert response.status_code == 410
     assert response.json()["code"] == "upload_expired"
+    key = f"q/{created.json()['workspace']['id']}/{upload_id}.bin"
+    assert storage.quarantine.size(key) == source.size_bytes
+
+
+async def test_upload_a_day_past_expiry_is_purged_with_its_object(
+    api: Api,
+    superuser_engine: AsyncEngine,
+    worker_sessions: async_sessionmaker[AsyncSession],
+    storage: ObjectStorage,
+) -> None:
+    source = SOURCES[0]
+    async with api.client() as client:
+        created = await create_archive(client)
+        upload_id = await upload(client, created, source.path.read_bytes(), source.path.name)
+        await _expire(superuser_engine, upload_id, hours_ago=25)
+        await Purger(worker_sessions, storage).run_once()
+        response = await create_document(client, created, upload_id)
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "upload_not_found"
+    key = f"q/{created.json()['workspace']['id']}/{upload_id}.bin"
+    assert storage.quarantine.size(key) is None
 
 
 async def test_consumed_upload_cannot_make_a_second_document(api: Api) -> None:

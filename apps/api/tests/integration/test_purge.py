@@ -91,8 +91,8 @@ async def test_purge_removes_only_what_is_due_and_is_idempotent(
         await connection.execute(
             text(
                 "INSERT INTO app.uploads (id, workspace_id, quarantine_key, max_bytes, created_at,"
-                " expires_at) VALUES (:id, :ws, :key, 20971520, now() - interval '2 hours',"
-                " now() - interval '1 hour')"
+                " expires_at) VALUES (:id, :ws, :key, 20971520, now() - interval '26 hours',"
+                " now() - interval '25 hours')"
             ),
             {"id": uuid4(), "ws": workspace_id, "key": upload_key},
         )
