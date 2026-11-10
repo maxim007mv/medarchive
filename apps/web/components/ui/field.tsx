@@ -3,6 +3,12 @@ import { useId, type ReactNode } from "react";
 
 import { cn } from "./cn";
 
+/** A visible label, or a name for controls whose label lives elsewhere (dialog title, cell). */
+export type AccessibleName =
+  | { label: string; "aria-label"?: undefined; "aria-labelledby"?: undefined }
+  | { label?: undefined; "aria-label": string; "aria-labelledby"?: undefined }
+  | { label?: undefined; "aria-label"?: undefined; "aria-labelledby": string };
+
 /** Label above, hint or error below (brandbook §6). */
 export type FieldProps = {
   label: string;

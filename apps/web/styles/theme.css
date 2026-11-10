@@ -53,6 +53,8 @@
   --shadow-3: var(--shadow-3);
   /* Selected segment: card shadow plus the 2px accent underline (TZ-frontend FE-05). */
   --shadow-segment: var(--shadow-1), inset 0 -2px 0 var(--c-accent);
+  /* Selected radio row: accent border doubled inside (brandbook §6, D12). */
+  --shadow-row-selected: inset 0 0 0 1px var(--c-accent);
   /* Focused field: outer ring of 22% accent (brandbook §6). */
   --shadow-field-focus: 0 0 0 3px color-mix(in srgb, var(--c-focus) 22%, transparent);
   /* Field with an error: 1px border plus 1px inset makes the 2px danger border without a shift. */
