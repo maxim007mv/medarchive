@@ -59,4 +59,4 @@
 | `screens/mobile-dark-03.png` | M06 Документ и заметка |
 | `screens/mobile-dark-04.png` | M07 Удаление |
 
-Пересборка снимков: `python3 gen.py && python3 shot.py desktop-light desktop-dark mobile-light mobile-dark` в `build/screens`; пересборка PDF брендбука: `python3 bb.py && python3 pdf.py`.
+Пересборка снимков: `python3 gen.py && python3 shot.py desktop-light desktop-dark mobile-light mobile-dark` в `02_design/source`; пересборка PDF брендбука там же: `python3 bb.py && python3 pdf.py`.
