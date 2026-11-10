@@ -80,3 +80,32 @@ Web: next 15.5.29, react/react-dom 19.3.1, typescript 5.9.3, tailwindcss и @tai
 - Файл KEK смонтирован с правами 0600 хоста. На Docker Desktop для macOS контейнер его читает; на Linux uid 10001 может не прочитать файл другого владельца. В CI `compose up` не запускается.
 - `apps/web/lib/api/schema.d.ts` сгенерирован из текущего `openapi.yaml` и закоммичен. После правок контракта нужно `make gen-api`.
 - `next build` дописывает `allowJs: true` в `tsconfig.json`; оставлено как есть.
+
+## Исправление: секреты api (10.11.2026, вечер)
+
+Причина: `app/core/config.py` требует `CSRF_SECRET` и `PAGE_TOKEN_KEY` (`SecretStr`, не короче 32 символов; используются как UTF-8 строка для HMAC и HKDF), а compose их не передавал, и api не стартовал. Остальные обязательные настройки (`DATABASE_URL`, `REDIS_URL`, `S3_*`, `KEK_KEYSET_PATH`) уже были в окружении. `PAGE_TOKEN_KEY_PREVIOUS`, `TRUSTED_PROXIES` и прочие имеют значения по умолчанию. Воркеру (`WorkerSettings`) эти секреты не нужны.
+
+Что изменено:
+
+- `infra/secrets/generate.py`: в существующий `.env` дописываются ключи из `.env.example`, которых в нём нет (пустые значения заполняются `secrets.token_urlsafe(32)`, 43 символа). Имеющиеся строки и файл KEK не меняются. В вывод попадают только имена ключей.
+- `.env.example`: `CSRF_SECRET`, `PAGE_TOKEN_KEY` с пояснением про ротацию через `PAGE_TOKEN_KEY_PREVIOUS`.
+- `docker-compose.yml`: api получает `CSRF_SECRET` и `PAGE_TOKEN_KEY` (`:?run make secrets`).
+- `docker-compose.yml`, worker: `healthcheck: { disable: true }` ломал `docker compose up --wait` («container ... has no healthcheck configured», Compose 2.29), а значит и `make up`. Теперь проверка открывает TCP-соединения к `db:5432` и `minio:9000`: это то, что нужно воркеру для очистки.
+- `infra/minio/api-policy.json`: добавлен `s3:ListBucket` только на `ma-docs`. Без него шаг orphans воркера (`list_objects_v2` по `ws/`) падал с `purge_storage_unavailable`.
+
+Проверка:
+
+| Команда | Результат |
+|---|---|
+| `make secrets` на существующем `.env` | `added to .env: WEB_PORT, API_PORT, CSRF_SECRET, PAGE_TOKEN_KEY`; первые 17 строк побайтно совпадают с прежними, KEK не изменился, оба новых значения по 43 символа, права 0600 |
+| повторный `make secrets` | `kept .env`, `kept secrets/kek_keyset.json` |
+| генератор на чистой копии | `.env` создан, пустых значений нет |
+| `COMPOSE_PROJECT_NAME=medarchive_found WEB_PORT=3500 API_PORT=8500 MINIO_PORT=9500 MINIO_CONSOLE_PORT=9501 IMAGE_TAG=found docker compose up -d --build --wait` | код 0, все сервисы healthy, `migrate` и `minio-init` код 0 |
+| `curl :8500/healthz` | 200 `{"status":"ok"}` |
+| `curl :8500/readyz` | 200 `{"status":"ok","checks":{"db":"ok","storage":"ok","kek":"ok"}}` |
+| `curl :3500/api/v1/session` | 401 от api через прокси web |
+| лог воркера после правки политики | `purge_finished`, `storage_failures: 0`; `ma-api` по-прежнему не может листать `ma-quarantine` |
+| ruff, ruff format, mypy strict для `infra/` | чисто |
+| `docker compose down -v` своего проекта, удаление образов `:found` | выполнено; чужие стеки `medarchive` и `medarchive_qa` не трогались |
+
+Отклонение: порты 3300 и 8800 заняты запущенным стеком `medarchive` другого агента (а 3400/8900 стеком `medarchive_qa`), поэтому проверка шла на 3500/8500 с MinIO на 9500/9501.

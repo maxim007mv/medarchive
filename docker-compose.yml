@@ -92,6 +92,8 @@ services:
       S3_BUCKET_QUARANTINE: ma-quarantine
       S3_BUCKET_DOCS: ma-docs
       KEK_KEYSET_PATH: /run/secrets/kek_keyset
+      CSRF_SECRET: ${CSRF_SECRET:?run make secrets}
+      PAGE_TOKEN_KEY: ${PAGE_TOKEN_KEY:?run make secrets}
       # BE-12: proxies whose X-Forwarded-For is believed (JSON list of networks, D-005) and the
       # limits switch the gate turns off for functional E2E and k6 (D-006).
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-[]}
@@ -114,8 +116,16 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_QUARANTINE: ma-quarantine
       S3_BUCKET_DOCS: ma-docs
-    # The image's HEALTHCHECK probes the API port, which the worker does not open.
-    healthcheck: { disable: true }
+    # The image's HEALTHCHECK probes the API port, which the worker does not open. Disabling it
+    # instead makes `docker compose up --wait` fail, so probe what the worker needs to purge.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import socket; [socket.create_connection(a, 2).close() for a in (("db", 5432), ("minio", 9000))]
+      interval: 30s
+      retries: 3
     depends_on:
       migrate: { condition: service_completed_successfully }
       minio-init: { condition: service_completed_successfully }
