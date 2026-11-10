@@ -67,7 +67,7 @@ export function SegmentedControl<T extends string>({
             className={cn(
               "h-control-sm text-label text-text2 rounded-sm px-3 whitespace-nowrap",
               "duration-fast hover:text-text transition-colors ease-out",
-              "data-[state=checked]:bg-surface data-[state=checked]:text-text data-[state=checked]:shadow-segment",
+              "data-[state=checked]:bg-surface data-[state=checked]:text-text data-[state=checked]:shadow-segment-indicator",
               "disabled:text-disabled-text disabled:cursor-not-allowed",
               fullWidth && "flex-1",
             )}

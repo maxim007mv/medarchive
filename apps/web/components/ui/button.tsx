@@ -11,7 +11,7 @@ export type ButtonSize = "sm" | "md" | "lg";
 const sizeClasses: Record<ButtonSize, string> = {
   sm: "h-control-sm rounded-md px-3 text-label",
   md: "h-control-md rounded-lg px-4 text-body font-medium",
-  lg: "h-control-lg rounded-lg px-5 text-button-lg font-medium",
+  lg: "h-control-lg rounded-lg px-5 text-button-lg",
 };
 
 const variantClasses: Record<ButtonVariant, string> = {

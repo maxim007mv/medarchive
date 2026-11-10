@@ -51,14 +51,12 @@
   --shadow-*: initial;
   --shadow-1: var(--shadow-1);
   --shadow-3: var(--shadow-3);
-  /* Selected segment: card shadow plus the 2px accent underline (TZ-frontend FE-05). */
-  --shadow-segment: var(--shadow-1), inset 0 -2px 0 var(--c-accent);
+  --shadow-segment-indicator: var(--component-segmentIndicator);
   /* Selected radio row: accent border doubled inside (brandbook §6, D12). */
   --shadow-row-selected: inset 0 0 0 1px var(--c-accent);
-  /* Focused field: outer ring of 22% accent (brandbook §6). */
-  --shadow-field-focus: 0 0 0 3px color-mix(in srgb, var(--c-focus) 22%, transparent);
-  /* Field with an error: 1px border plus 1px inset makes the 2px danger border without a shift. */
-  --shadow-field-error: inset 0 0 0 1px var(--c-danger);
+  --shadow-field-focus: var(--component-fieldFocusRing);
+  /* The 1px border plus an inset makes the error border without shifting the content. */
+  --shadow-field-error: inset 0 0 0 calc(var(--component-fieldErrorBorder) - 1px) var(--c-danger);
 
   --font-*: initial;
   --font-sans: var(--font-sans);
@@ -95,13 +93,12 @@
   --text-mono: var(--type-mono-size);
   --text-mono--line-height: var(--type-mono-line);
   --text-mono--font-weight: var(--type-mono-weight);
-  /* Large button label: brandbook §5 sets 15px, tokens.json has no style for it. */
-  --text-button-lg: 15px;
-  --text-button-lg--line-height: var(--type-body-line);
+  --text-button-lg: var(--type-buttonLg-size);
+  --text-button-lg--line-height: var(--type-buttonLg-line);
+  --text-button-lg--font-weight: var(--type-buttonLg-weight);
 
-  /* Modal widths: form 560, confirmation 440 (brandbook §9); tokens.json has no size for them. */
-  --container-dialog-form: 560px;
-  --container-dialog-confirm: 440px;
+  --container-dialog-form: var(--component-dialogWidthForm);
+  --container-dialog-confirm: var(--component-dialogWidthConfirm);
 
   --spacing-control-sm: var(--control-heightSm);
   --spacing-control-md: var(--control-heightMd);
