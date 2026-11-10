@@ -21,6 +21,9 @@ const moscowDay = (instant: string) =>
   }).format(new Date(instant));
 
 test.describe("list, search and filters (FE-13..FE-15)", () => {
+  // Seeding goes through upload, PDF checks and encryption: seconds per document.
+  test.describe.configure({ timeout: 120_000 });
+
   let uploadedDay = "";
 
   test.beforeEach(async ({ page, freshArchive }) => {
@@ -133,6 +136,8 @@ test.describe("list, search and filters (FE-13..FE-15)", () => {
 
       await page.getByRole("button", { name: "Показать его" }).click();
 
+      await expect(page).toHaveURL(/undated=true/);
+      await expect(rows(page)).toHaveCount(1);
       expect(await rowTitles(page)).toEqual(["ЭКГ покоя"]);
       await expect(
         page.getByRole("button", { name: "Убрать фильтр «Без даты»" }),

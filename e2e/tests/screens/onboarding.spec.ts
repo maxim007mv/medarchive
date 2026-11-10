@@ -7,6 +7,9 @@ import { uploadDialog } from "./helpers";
 const [bloodTest] = sources;
 
 test.describe("onboarding and consent (FE-11)", () => {
+  // Seeding goes through upload, PDF checks and encryption: seconds per document.
+  test.describe.configure({ timeout: 120_000 });
+
   test(
     "TC-001 clean profile shows D01 with the pick button locked until consent",
     { tag: ["@b3", "@P0", "@TC-001"] },

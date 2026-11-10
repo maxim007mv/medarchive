@@ -4,12 +4,15 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "../../support/fixtures";
 import { sources } from "../../support/manifest";
 
-import { isPhone, row, rowTitles, rows } from "./helpers";
+import { isPhone, row, rowTitles, rows, SAVE_TIMEOUT_MS } from "./helpers";
 
 const bySource = (title: string) =>
   sources.find((source) => source.title === title)!;
 
 test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
+  // Seeding goes through upload, PDF checks and encryption: seconds per document.
+  test.describe.configure({ timeout: 120_000 });
+
   test.beforeEach(async ({ page, freshArchive }) => {
     await freshArchive.api.addAllSources();
     await page.goto("/");
@@ -51,6 +54,12 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
         .getByRole("link", { name: "Общий анализ крови" })
         .click();
       const note = page.getByRole("textbox", { name: "Заметка" });
+      // The save takes milliseconds locally; holding it makes «Сохраняем…» observable.
+      await page.route("**/api/v1/documents/*", async (route) => {
+        if (route.request().method() === "PATCH")
+          await new Promise((resolve) => setTimeout(resolve, 700));
+        await route.continue();
+      });
 
       await note.fill("Холестерин выше нормы, пересдать в октябре.");
 
@@ -78,7 +87,7 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
       await second.goto(page.url());
       await expect(
         second.getByRole("textbox", { name: "Заметка" }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: SAVE_TIMEOUT_MS });
 
       await page
         .getByRole("textbox", { name: "Заметка" })
@@ -143,6 +152,10 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
         page.getByRole("button", { name: "Изменить описание" }),
       ).toBeVisible();
       await page.getByRole("link", { name: "Все документы" }).click();
+      await expect(rows(page)).toHaveCount(6);
+      await expect(row(page, "ЭКГ покоя").getByText("Не указана")).toHaveCount(
+        0,
+      );
 
       const titles = await rowTitles(page);
       expect(titles.indexOf("ЭКГ покоя")).toBe(
@@ -167,9 +180,9 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
       await page.getByRole("menuitem", { name: "Удалить" }).click();
 
       const dialog = page.getByRole("dialog", { name: "Удалить документ?" });
-      await expect(
-        dialog.getByText(/«Заключение терапевта» от 10\.04\.2026/),
-      ).toBeVisible();
+      await expect(dialog).toContainText(
+        "«Заключение терапевта» от 10.04.2026",
+      );
       await expect(
         dialog.getByRole("button", { name: "Отмена" }),
       ).toBeFocused();
@@ -177,7 +190,9 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
         .getByRole("button", { name: "Удалить", exact: true })
         .click();
 
-      await expect(page.getByText("Документ удалён")).toBeVisible();
+      await expect(
+        page.getByText("Документ удалён", { exact: true }),
+      ).toBeVisible();
       await expect(rows(page)).toHaveCount(5);
       await page.reload();
       await expect(rows(page)).toHaveCount(5);
@@ -194,8 +209,10 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
       await menu.click();
       await page.getByRole("menuitem", { name: "Удалить" }).click();
       await expect(
-        page.getByRole("dialog", { name: "Удалить документ?" }),
-      ).toBeVisible();
+        page
+          .getByRole("dialog", { name: "Удалить документ?" })
+          .getByRole("button", { name: "Отмена" }),
+      ).toBeFocused();
 
       await page.keyboard.press("Escape");
 
@@ -221,6 +238,11 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
         .getByRole("button", { name: "Ещё" })
         .click();
       await page.getByRole("menuitem", { name: "Удалить" }).click();
+      await expect(
+        page
+          .getByRole("dialog", { name: "Удалить документ?" })
+          .getByRole("button", { name: "Отмена" }),
+      ).toBeFocused();
 
       await page.keyboard.press("Enter");
 

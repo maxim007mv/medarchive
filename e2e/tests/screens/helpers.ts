@@ -10,6 +10,9 @@ import {
 
 import type { DocumentType, SourceFixture } from "../../support/manifest";
 
+/** `POST /documents` checks, encrypts and stores the PDF: seconds under parallel workers. */
+export const SAVE_TIMEOUT_MS = 15_000;
+
 const TYPE_LABELS: Record<DocumentType, string> = {
   analysis: "Анализ",
   conclusion: "Заключение",
@@ -95,8 +98,8 @@ export async function addThroughUi(
   await fillDocumentForm(dialog, source);
   await dialog.getByRole("button", { name: "Сохранить в архив" }).click();
   await expect(
-    page.getByText(`Документ «${source.title}» добавлен`),
-  ).toBeVisible();
+    page.getByText(`Документ «${source.title}» добавлен`, { exact: true }),
+  ).toBeVisible({ timeout: SAVE_TIMEOUT_MS });
   await expect(dialog).toBeHidden();
 }
 

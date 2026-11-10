@@ -14,6 +14,7 @@ import {
   row,
   rowTitles,
   rows,
+  SAVE_TIMEOUT_MS,
 } from "./helpers";
 
 const [bloodTest] = sources;
@@ -30,6 +31,9 @@ const isDocumentCreate = (request: Request) =>
   request.method() === "POST" && request.url().endsWith("/api/v1/documents");
 
 test.describe("upload (FE-12)", () => {
+  // Seeding goes through upload, PDF checks and encryption: seconds per document.
+  test.describe.configure({ timeout: 120_000 });
+
   test.beforeEach(async ({ page, freshArchive }) => {
     expect(freshArchive.workspaceId).toBeTruthy();
     await page.goto("/");
@@ -198,8 +202,10 @@ test.describe("upload (FE-12)", () => {
         .dblclick();
 
       await expect(
-        page.getByText("Документ «Общий анализ крови» добавлен"),
-      ).toBeVisible();
+        page.getByText("Документ «Общий анализ крови» добавлен", {
+          exact: true,
+        }),
+      ).toBeVisible({ timeout: SAVE_TIMEOUT_MS });
       await expect(rows(page)).toHaveCount(1);
       await page.reload();
       await expect(rows(page)).toHaveCount(1);
@@ -210,15 +216,19 @@ test.describe("upload (FE-12)", () => {
     "TC-020 a break during upload keeps the fields and «Повторить загрузку» finishes",
     { tag: ["@b4", "@P0", "@TC-020"] },
     async ({ page, baseURL }) => {
-      // The only other origin the app talks to is the storage (CSP connect-src): the first transfer
-      // there is cut, the retry goes through.
+      // The only other origin the app talks to is the storage (CSP connect-src). The first
+      // transfer is held while the person fills the form and presses save, then cut; the retry
+      // goes through.
       const appOrigin = new URL(baseURL ?? "http://localhost:3000").origin;
-      let cut = false;
+      let cutNow!: () => void;
+      const saved = new Promise<void>((resolve) => (cutNow = resolve));
+      let held = false;
       await page.route(
         (url) => url.origin !== appOrigin,
         async (route) => {
-          if (cut) return route.continue();
-          cut = true;
+          if (held) return route.continue();
+          held = true;
+          await saved;
           return route.abort("connectionreset");
         },
       );
@@ -229,6 +239,10 @@ test.describe("upload (FE-12)", () => {
         documentDate: "2026-04-08",
       });
       await dialog.getByRole("button", { name: "Сохранить в архив" }).click();
+      await expect(
+        dialog.getByRole("button", { name: "Сохраняем…" }),
+      ).toBeVisible();
+      cutNow();
 
       await expect(
         dialog.getByText(/^Связь прервалась на \d+%$/),
@@ -254,8 +268,10 @@ test.describe("upload (FE-12)", () => {
       await retried;
 
       await expect(
-        page.getByText("Документ «Общий анализ крови» добавлен"),
-      ).toBeVisible();
+        page.getByText("Документ «Общий анализ крови» добавлен", {
+          exact: true,
+        }),
+      ).toBeVisible({ timeout: SAVE_TIMEOUT_MS });
       await expect(rows(page)).toHaveCount(1);
     },
   );

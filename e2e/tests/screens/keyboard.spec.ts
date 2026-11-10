@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "../../support/fixtures";
 import { sources } from "../../support/manifest";
 
-import { rows, uploadDialog } from "./helpers";
+import { rows, SAVE_TIMEOUT_MS, uploadDialog } from "./helpers";
 
 const [bloodTest] = sources;
 
@@ -24,7 +24,8 @@ const focusedName = (page: Page) =>
   page.evaluate(() => {
     const element = document.activeElement as HTMLElement | null;
     return (
-      element?.getAttribute("aria-label") ?? element?.textContent?.trim() ?? ""
+      // innerText skips the invisible loading copy of a Button label.
+      element?.getAttribute("aria-label") ?? element?.innerText?.trim() ?? ""
     );
   });
 
@@ -36,6 +37,9 @@ async function expectVisibleFocus(page: Page): Promise<void> {
 }
 
 test.describe("keyboard and phone layout", () => {
+  // Seeding goes through upload, PDF checks and encryption: seconds per document.
+  test.describe.configure({ timeout: 120_000 });
+
   test(
     "TC-111 add, find, open and delete with the keyboard only",
     { tag: ["@b6", "@P0", "@TC-111"] },
@@ -74,8 +78,10 @@ test.describe("keyboard and phone layout", () => {
       await page.keyboard.type("08042026");
       await page.keyboard.press("Enter");
       await expect(
-        page.getByText("Документ «Общий анализ крови» добавлен"),
-      ).toBeVisible();
+        page.getByText("Документ «Общий анализ крови» добавлен", {
+          exact: true,
+        }),
+      ).toBeVisible({ timeout: SAVE_TIMEOUT_MS });
 
       await page.keyboard.press("/");
       await expect(
@@ -110,7 +116,9 @@ test.describe("keyboard and phone layout", () => {
       await page.keyboard.press("Tab");
       await page.keyboard.press("Enter");
 
-      await expect(page.getByText("Документ удалён")).toBeVisible();
+      await expect(
+        page.getByText("Документ удалён", { exact: true }),
+      ).toBeVisible();
       await expect(page).toHaveURL(/\/(\?.*)?$/);
     },
   );
@@ -123,6 +131,8 @@ test.describe("keyboard and phone layout", () => {
       { tag: ["@b6", "@P1", "@TC-112"] },
       async ({ page, freshArchive }) => {
         await freshArchive.api.addAllSources();
+        // The sheet slides in; measured at rest.
+        await page.emulateMedia({ reducedMotion: "reduce" });
         await page.goto("/");
         const bottomGap = async (name: string) =>
           page

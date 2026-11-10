@@ -27,6 +27,9 @@ async function openByKey(page: Page, accessKey: string): Promise<void> {
 const WRONG_KEY = "0000-0000-0000-0000-0000-0000";
 
 test.describe("sessions and key (FE-10, FE-22)", () => {
+  // Seeding goes through upload, PDF checks and encryption: seconds per document.
+  test.describe.configure({ timeout: 120_000 });
+
   // TC-082 spends the login attempts of this IP, so the key tests run in this order, one by one.
   test.describe.configure({ mode: "serial" });
 
@@ -57,7 +60,7 @@ test.describe("sessions and key (FE-10, FE-22)", () => {
 
       await expect(rows(page)).toHaveCount(6);
       expect(await rowTitles(page)).toEqual(titlesInDefaultOrder);
-      await expect(page.getByText(/есть заметка/i)).toHaveCount(1);
+      await expect(rows(page).getByText(/есть заметка/i)).toHaveCount(1);
       await reopened.close();
     },
   );
@@ -199,7 +202,9 @@ test.describe("sessions and key (FE-10, FE-22)", () => {
       await context.setOffline(true);
       await page.evaluate(() => window.dispatchEvent(new Event("offline")));
 
-      await expect(page.getByText("Нет связи с сервером.")).toBeVisible();
+      await expect(
+        page.getByText("Нет связи с сервером.", { exact: true }),
+      ).toBeVisible();
       await expect(
         page.getByText(
           "Показаны документы из последней загрузки. Изменения пока недоступны.",
@@ -214,7 +219,9 @@ test.describe("sessions and key (FE-10, FE-22)", () => {
 
       await context.setOffline(false);
       await page.evaluate(() => window.dispatchEvent(new Event("online")));
-      await expect(page.getByText("Нет связи с сервером.")).toBeHidden();
+      await expect(
+        page.getByText("Нет связи с сервером.", { exact: true }),
+      ).toBeHidden();
     },
   );
 });

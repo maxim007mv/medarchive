@@ -28,6 +28,9 @@ async function openList(page: Page) {
 
 for (const theme of ["light", "dark"] as const) {
   test.describe(`screens, ${theme}`, () => {
+    // Seeding goes through upload, PDF checks and encryption: seconds per document.
+    test.describe.configure({ timeout: 120_000 });
+
     test.beforeEach(async ({ page }) => emulateStillTheme(page, theme));
 
     test(`D01 onboarding, ${theme}`, async ({ page }, testInfo) => {
@@ -156,7 +159,9 @@ for (const theme of ["light", "dark"] as const) {
 
       await context.setOffline(true);
       await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-      await expect(page.getByText("Нет связи с сервером.")).toBeVisible();
+      await expect(
+        page.getByText("Нет связи с сервером.", { exact: true }),
+      ).toBeVisible();
       await saveScreen(page, testInfo, `D14-offline-${theme}`);
       await context.setOffline(false);
     });

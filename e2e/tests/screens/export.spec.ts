@@ -44,6 +44,9 @@ async function downloadExport(
 }
 
 test.describe("export (FE-20)", () => {
+  // Seeding goes through upload, PDF checks and encryption: seconds per document.
+  test.describe.configure({ timeout: 120_000 });
+
   test(
     "TC-070 the whole archive: six PDFs with transliterated names, CSV and JSON",
     { tag: ["@b6", "@P0", "@TC-070"] },
