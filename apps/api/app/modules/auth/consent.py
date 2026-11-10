@@ -7,4 +7,4 @@ recomputes it from docs/ and fails when the label or the policy changes.
 """
 
 POLICY_VERSION = "2026-11-10"
-EVIDENCE_SHA256 = bytes.fromhex("b62267fca99d2421c5f8885530a5b522ac2b181f6b0c1883afcc71bc454fa1cb")
+EVIDENCE_SHA256 = bytes.fromhex("c524b77751cffb2204d28fa4eb47656577f9afa7963787df90568335cca8c23a")
