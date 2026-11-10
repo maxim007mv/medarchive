@@ -94,7 +94,7 @@ def test_wrapped_keys_do_not_open_with_another_kek(
 def test_unreadable_kek_file_is_counted(tmp_path: Path) -> None:
     before = _kek_errors("load_kek")
 
-    with pytest.raises(OSError):
+    with pytest.raises(FileNotFoundError):
         Kek.from_file(tmp_path / "missing.json")
     assert _kek_errors("load_kek") == before + 1
 
