@@ -397,40 +397,44 @@ def run_e2e(gate: Gate) -> None:
     gate.pending_e2e = int(found.group(1)) if found else None
 
 
+# They end the hook's session, so each case makes it create a new archive (10 per hour per IP).
+SESSION_ENDING_OPERATIONS = {"sessions.delete", "workspace.delete"}
+
+
 def run_schemathesis(gate: Gate) -> None:
+    """Two passes: the session-ending operations apart, with few examples."""
     blocks = read_json(WORKTREE / "apps/api/tests/contract/operation-blocks.json")
-    operations = "|".join(re.escape(op) for op, block in blocks.items() if block <= gate.block)
-    report = gate.logs / "schemathesis.xml"
-    gate.run(
-        "schemathesis --checks all",
-        [
-            "uv",
-            "run",
-            "schemathesis",
-            "run",
-            "../../openapi.yaml",
-            "--url",
-            API_URL,
-            "--checks",
-            "all",
-            "--include-operation-id-regex",
-            f"^({operations})$",
-            "--max-examples",
-            "25",
-            "--seed",
-            "20261110",
-            "--workers",
-            "1",
-            "--report",
-            "junit",
-            "--report-junit-path",
-            str(report),
-        ],
-        blocking=gate.block >= HARDENING_BLOCK,
-        cwd=WORKTREE / "apps/api",
-        env={"CONTRACT_BASE_URL": API_URL, "SCHEMATHESIS_HOOKS": "tests.contract.hooks"},
-        summarize=from_report(lambda: read_junit(report, "schemathesis"), gate),
-    )
+    gated = {op for op, block in blocks.items() if block <= gate.block}
+    passes = [
+        ("schemathesis --checks all", gated - SESSION_ENDING_OPERATIONS, "25"),
+        ("schemathesis --checks all, session-ending", gated & SESSION_ENDING_OPERATIONS, "3"),
+    ]
+    for name, operations, examples in passes:
+        if not operations:
+            continue
+        # The QA stack's Redis holds rate-limit counters only; the hook needs a fresh budget.
+        compose("exec", "-T", "redis", "redis-cli", "FLUSHALL")
+        report = gate.logs / f"schemathesis-{len(gate.steps)}.xml"
+        regex = "|".join(re.escape(op) for op in sorted(operations))
+        options = {
+            "--url": API_URL,
+            "--checks": "all",
+            "--include-operation-id-regex": f"^({regex})$",
+            "--max-examples": examples,
+            "--seed": "20261110",
+            "--workers": "1",
+            "--report": "junit",
+            "--report-junit-path": str(report),
+        }
+        gate.run(
+            name,
+            ["uv", "run", "schemathesis", "run", "../../openapi.yaml"]
+            + [part for pair in options.items() for part in pair],
+            blocking=gate.block >= HARDENING_BLOCK,
+            cwd=WORKTREE / "apps/api",
+            env={"CONTRACT_BASE_URL": API_URL, "SCHEMATHESIS_HOOKS": "tests.contract.hooks"},
+            summarize=from_report(partial(read_junit, report, "schemathesis"), gate),
+        )
 
 
 def pii_markers() -> list[str]:
