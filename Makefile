@@ -1,6 +1,6 @@
 .PHONY: setup secrets up down lint typecheck test e2e ci images gen-api fixtures \
 	contract a11y visual visual-baseline security audit-python audit-node gitleaks trivy zap load \
-	verify-block
+	alerts verify-block
 
 API := uv run --directory apps/api
 export NEXT_TELEMETRY_DISABLED := 1
@@ -15,6 +15,7 @@ TRIVY_IMAGE := aquasec/trivy:0.76.2
 GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1
 ZAP_IMAGE := ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
 K6_IMAGE := grafana/k6:2.3.0
+PROMETHEUS_IMAGE := prom/prometheus:v3.16.0
 PIP_AUDIT := pip-audit==2.10.0
 BASE_IMAGES := python:3.12-slim-bookworm node:22-alpine
 
@@ -125,6 +126,13 @@ load:
 		-v "$(CURDIR)/MedArchive/05_qa/fixtures:/fixtures:ro" -v "$(abspath $(REPORT_DIR)):/out" \
 		-e API_URL=http://api:8000 -e LOAD_DOCUMENTS=$(or $(LOAD_DOCUMENTS),1000) \
 		$(K6_IMAGE) run --summary-export /out/k6-summary.json /load/k6/documents-list.js
+
+# OPS-08 locally: rule syntax and the unit tests of every alert.
+alerts:
+	docker run --rm -v "$(CURDIR)/infra/prometheus:/rules:ro" -w /rules --entrypoint promtool \
+		$(PROMETHEUS_IMAGE) check rules alerts.yml
+	docker run --rm -v "$(CURDIR)/infra/prometheus:/rules:ro" -w /rules --entrypoint promtool \
+		$(PROMETHEUS_IMAGE) test rules alerts.test.yml
 
 # Gate of block N on the committed HEAD: `make verify-block N=3`.
 verify-block:
