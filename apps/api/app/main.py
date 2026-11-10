@@ -14,6 +14,9 @@ from app.core.page_token import PageTokenCodec
 from app.core.ratelimit import RateLimiter
 from app.db.engine import create_engine, create_sessionmaker
 from app.modules.auth.router import router as auth_router
+from app.modules.documents.router import router as documents_router
+from app.modules.exports.router import router as exports_router
+from app.modules.uploads.router import router as uploads_router
 from app.modules.workspace.router import router as workspace_router
 from app.storage.s3 import ObjectStorage
 
@@ -54,6 +57,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth_router)
     app.include_router(workspace_router)
+    app.include_router(uploads_router)
+    app.include_router(documents_router)
+    app.include_router(exports_router)
     return app
 
 
