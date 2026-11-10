@@ -56,33 +56,35 @@ export function AppHeader({
             )}
             {actions && (
               <>
-                <IconButton
-                  icon={Download}
-                  aria-label={texts["header.export"]}
-                  disabled={Boolean(actions.exportDisabledReason)}
-                  disabledReason={actions.exportDisabledReason}
-                  onClick={actions.onExport}
-                  className="md:hidden"
-                />
-                <Button
-                  variant="secondary"
-                  icon={Download}
-                  disabled={Boolean(actions.exportDisabledReason)}
-                  disabledReason={actions.exportDisabledReason}
-                  onClick={actions.onExport}
-                  className="hidden md:inline-grid"
-                >
-                  {texts["header.export"]}
-                </Button>
-                <Button
-                  icon={Plus}
-                  disabled={Boolean(actions.addDisabledReason)}
-                  disabledReason={actions.addDisabledReason}
-                  onClick={actions.onAdd}
-                  className="hidden md:inline-grid"
-                >
-                  {texts["header.add"]}
-                </Button>
+                {/* Wrappers switch the variants: a `hidden` class on Button would fight its own display. */}
+                <span className="md:hidden">
+                  <IconButton
+                    icon={Download}
+                    aria-label={texts["header.export"]}
+                    disabled={Boolean(actions.exportDisabledReason)}
+                    disabledReason={actions.exportDisabledReason}
+                    onClick={actions.onExport}
+                  />
+                </span>
+                <span className="hidden items-center gap-2 md:flex">
+                  <Button
+                    variant="secondary"
+                    icon={Download}
+                    disabled={Boolean(actions.exportDisabledReason)}
+                    disabledReason={actions.exportDisabledReason}
+                    onClick={actions.onExport}
+                  >
+                    {texts["header.export"]}
+                  </Button>
+                  <Button
+                    icon={Plus}
+                    disabled={Boolean(actions.addDisabledReason)}
+                    disabledReason={actions.addDisabledReason}
+                    onClick={actions.onAdd}
+                  >
+                    {texts["header.add"]}
+                  </Button>
+                </span>
               </>
             )}
           </div>
