@@ -92,6 +92,10 @@ services:
       S3_BUCKET_QUARANTINE: ma-quarantine
       S3_BUCKET_DOCS: ma-docs
       KEK_KEYSET_PATH: /run/secrets/kek_keyset
+      # BE-12: proxies whose X-Forwarded-For is believed (JSON list of networks, D-005) and the
+      # limits switch the gate turns off for functional E2E and k6 (D-006).
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-[]}
+      RATE_LIMITS_ENABLED: ${RATE_LIMITS_ENABLED:-true}
     secrets: [kek_keyset]
     ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
     depends_on:
