@@ -8,13 +8,15 @@ import { texts } from "@/lib/texts";
 import { seriousViolations } from "./axe";
 import { IconButton } from "./icon-button";
 
-test("FE-08: the label is the accessible name and shows as a tooltip on keyboard focus", async () => {
+test("FE-08: the label is the accessible name and the hover tooltip", async () => {
   render(<IconButton icon={Eye} aria-label={texts["list.row.open"]} />);
+  const button = screen.getByRole("button", { name: texts["list.row.open"] });
 
   await userEvent.tab();
-
-  const button = screen.getByRole("button", { name: texts["list.row.open"] });
   expect(button).toHaveFocus();
+  expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  await userEvent.hover(button);
+
   expect(await screen.findByRole("tooltip")).toHaveTextContent(texts["list.row.open"]);
 });
 

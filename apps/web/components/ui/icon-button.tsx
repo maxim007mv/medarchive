@@ -10,7 +10,7 @@ export type IconButtonProps = Omit<
   ComponentPropsWithRef<"button">,
   "children" | "aria-label" | "disabled"
 > & {
-  /** Required: an icon alone has no name (TZ-frontend FE-08). Also shown as the tooltip. */
+  /** Required: an icon alone has no name (TZ-frontend FE-08). Also the hover tooltip. */
   "aria-label": string;
   icon: LucideIcon;
   /** `md` 40 px with a 20 px icon, `sm` 32 px with a 16 px icon. */
@@ -53,7 +53,9 @@ export function IconButton({
   return (
     <Tooltip.Provider delayDuration={400}>
       <Tooltip.Root>
-        <Tooltip.Trigger asChild>
+        {/* Hover only (brandbook §13): a focus tooltip stacks over popovers and dialogs and takes
+            their Esc. Keyboard and screen reader users get the name from aria-label. */}
+        <Tooltip.Trigger asChild onFocus={(event) => event.preventDefault()}>
           <button
             type={type}
             aria-label={label}
@@ -78,7 +80,7 @@ export function IconButton({
         <Tooltip.Portal>
           <Tooltip.Content
             sideOffset={6}
-            className="animate-fade-in bg-primary text-caption text-on-primary shadow-3 z-50 max-w-xs rounded-sm px-2 py-1"
+            className="bg-primary motion-safe:animate-fade-in text-caption text-on-primary shadow-3 z-50 max-w-xs rounded-sm px-2 py-1"
           >
             {showReason ? disabledReason : label}
           </Tooltip.Content>
