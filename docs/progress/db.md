@@ -16,6 +16,10 @@
 | DB-09 | `app.workspaces_due_for_purge(limit)` и `app.purge_expired_workspace_create_keys(limit)`, лимит 500 |
 | DB-12 | `app/db/engine.py`: пул 10 без overflow, `statement_timeout 5s`, `autobegin=False`; `app/db/models.py`: типизированные модели всех 13 таблиц, связи `lazy="raise"` |
 
+### Дополнение: 0003_workspace_timezone (по запросу BACKEND-CORE)
+
+`workspaces.timezone text NULL` с CHECK длины 1..64; `app.create_workspace(bytea, text, text, bytea, text DEFAULT NULL)` вместо четырёхаргументной (пересоздана от `ma_auth`, вызовы с четырьмя аргументами работают, возвращает `timestamptz`). Откат возвращает прежнюю функцию и удаляет колонку. Тесты: цикл upgrade, downgrade, upgrade через 0003; пояс сохраняется и читается `ma_app` под RLS; без аргумента `NULL`; пустая строка отклоняется CHECK. `pytest tests/db` без планов: 162 passed (81 на 17 и 81 на 18).
+
 ## Отклонения от задания
 
 1. **Q4 не переведён в `Index Cond`.** Задание просило `title_bidx @>` в `Index Cond`, ADR-046 (источник истины) фиксирует `Filter`. Проверил сам на PostgreSQL 18: под суперпользователем условие в `Index Cond`; под `ma_app` при `FORCE ROW LEVEL SECURITY` остаётся в `Filter` и с явными `public.uuid_ops`/`pg_catalog.array_ops`, и с отдельным `gin (title_bidx)`, потому что `arraycontains` не `LEAKPROOF`. Тест проверяет план ADR-046: `workspace_id` в `Index Cond`, `@>` в `Filter`. Время 7,4 мс при бюджете 10 мс.

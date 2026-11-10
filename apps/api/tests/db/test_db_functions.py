@@ -85,6 +85,41 @@ async def test_db02_create_workspace_writes_workspace_and_active_consent(
     assert [tuple(row) for row in rows] == [("kek-1", "2026-11-10", None)]
 
 
+@pytest.mark.parametrize(
+    ("call", "timezone"),
+    [
+        (
+            "SELECT app.create_workspace(:dek, 'kek-1', '2026-11-10', :evidence, :timezone)",
+            "Asia/Yekaterinburg",
+        ),
+        ("SELECT app.create_workspace(:dek, 'kek-1', '2026-11-10', :evidence)", None),
+    ],
+    ids=["given", "four_argument_call"],
+)
+async def test_db01_create_workspace_stores_timezone_readable_by_app(
+    sessions: Sessions, call: str, timezone: str | None
+) -> None:
+    workspace_id = uuid.uuid4()
+    params: dict[str, Any] = {"dek": os.urandom(64), "evidence": os.urandom(32)}
+    if timezone is not None:
+        params["timezone"] = timezone
+
+    await _rows(sessions, call, params, workspace_id=workspace_id)
+    stored = await _rows(sessions, "SELECT timezone FROM app.workspaces", workspace_id=workspace_id)
+
+    assert [row.timezone for row in stored] == [timezone]
+
+
+async def test_db01_workspace_timezone_rejects_empty_name(sessions: Sessions) -> None:
+    with pytest.raises(DBAPIError, match="workspaces_timezone_length"):
+        await _rows(
+            sessions,
+            "SELECT app.create_workspace(:dek, 'kek-1', '2026-11-10', :evidence, '')",
+            {"dek": os.urandom(64), "evidence": os.urandom(32)},
+            workspace_id=uuid.uuid4(),
+        )
+
+
 async def test_db02_session_resolves_touches_within_absolute_limit_and_revokes(
     sessions: Sessions, make_workspace: MakeWorkspace
 ) -> None:

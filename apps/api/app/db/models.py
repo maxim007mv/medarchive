@@ -64,6 +64,8 @@ class Workspace(Base):
     kek_key_id: Mapped[str]
     deleted_at: Mapped[datetime | None]
     purge_after: Mapped[datetime | None]
+    # IANA name, e.g. Europe/Moscow; NULL for archives created before migration 0003.
+    timezone: Mapped[str | None]
 
 
 class Consent(Base):

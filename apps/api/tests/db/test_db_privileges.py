@@ -63,7 +63,7 @@ WORKER_FORBIDDEN = (
 DEFINER_FUNCTIONS = {
     "app.resolve_session(bytea)": ("ma_auth", "ma_app"),
     "app.find_access_key(text)": ("ma_auth", "ma_app"),
-    "app.create_workspace(bytea,text,text,bytea)": ("ma_auth", "ma_app"),
+    "app.create_workspace(bytea,text,text,bytea,text)": ("ma_auth", "ma_app"),
     "app.create_session(bytea,interval,interval)": ("ma_auth", "ma_app"),
     "app.touch_session(uuid,interval)": ("ma_auth", "ma_app"),
     "app.revoke_sessions(uuid)": ("ma_auth", "ma_app"),

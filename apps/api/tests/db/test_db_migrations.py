@@ -43,7 +43,7 @@ def test_db01_upgrade_downgrade_upgrade_on_empty_database(cluster: Cluster) -> N
         "app_schema": 1,
         "extensions": 3,
         "public_tables": ["alembic_version"],
-        "revision": "0002_privileges_functions",
+        "revision": "0003_workspace_timezone",
         "document_types": 3,
         "auth_can_create": False,
     }

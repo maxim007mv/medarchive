@@ -1,6 +1,6 @@
 # База данных: роли, функции, транзакции
 
-Схема: миграции `apps/api/migrations` (`0001_init` из `07-data-model.sql`, `0002_privileges_functions` по ADR-044, ADR-045, ADR-047). Модели ORM: `app/db/models.py`, DDL они не создают.
+Схема: миграции `apps/api/migrations` (`0001_init` из `07-data-model.sql`, `0002_privileges_functions` по ADR-044, ADR-045, ADR-047, `0003_workspace_timezone`: часовой пояс архива). Модели ORM: `app/db/models.py`, DDL они не создают.
 
 ## Роли
 
@@ -36,7 +36,7 @@ async with sessions() as session, workspace_tx(session, workspace_id, session_id
 |---|---|---|---|
 | `app.resolve_session(p_token_sha256 bytea)` | `TABLE(session_id uuid, workspace_id uuid)` | ma_app | Живая сессия неудалённого архива, без контекста |
 | `app.find_access_key(p_lookup_id text)` | `TABLE(access_key_id uuid, workspace_id uuid, secret_hash text)` | ma_app | Активный ключ неудалённого архива, без контекста |
-| `app.create_workspace(p_dek_ciphertext bytea, p_kek_key_id text, p_policy_version text, p_evidence_sha256 bytea)` | `timestamptz` (`created_at`) | ma_app | Строки `workspaces` (id = контекст) и `consents` |
+| `app.create_workspace(p_dek_ciphertext bytea, p_kek_key_id text, p_policy_version text, p_evidence_sha256 bytea, p_timezone text DEFAULT NULL)` | `timestamptz` (`created_at`) | ma_app | Строки `workspaces` (id = контекст, `timezone` = IANA-имя или `NULL`) и `consents`; вызов с четырьмя аргументами работает |
 | `app.create_session(p_token_sha256 bytea, p_idle_ttl interval, p_absolute_ttl interval)` | `TABLE(session_id uuid, idle_expires_at timestamptz, absolute_expires_at timestamptz)` | ma_app | Новая сессия; 0 строк, если архив удалён |
 | `app.touch_session(p_session_id uuid, p_idle_ttl interval)` | `timestamptz` или `NULL` | ma_app | Продлевает простой, не дальше абсолютного срока; `NULL` для чужой, отозванной, истёкшей |
 | `app.revoke_sessions(p_session_id uuid DEFAULT NULL)` | `integer` | ma_app | Отзывает одну сессию или, без аргумента, все сессии архива |
@@ -62,6 +62,7 @@ async with sessions() as session, workspace_tx(session, workspace_id, session_id
 
 ## Решения, которые не видны из DDL
 
+- Часовой пояс архива `workspaces.timezone` (0003): IANA-имя, CHECK только на длину 1..64, проверку по базе зон делает API. Для `GET /session` `ma_app` читает его обычным `SELECT timezone FROM app.workspaces` внутри `workspace_tx`; `NULL` у архивов без пояса, подставлять пояс по умолчанию приложению.
 - Абсолютный срок сессии 180 дней, простой 30 дней (ADR-047): значения передаёт приложение в `create_session` и `touch_session`; БД гарантирует только `idle_expires_at <= absolute_expires_at`.
 - `dek_ciphertext` остаётся `BETWEEN 32 AND 1024`: связка трёх keyset под KEK занимает 390 байт (ADR-047). `NULL` разрешён только у удалённого архива.
 - Поиск Q4: `title_bidx @>` под `ma_app` стоит в `Filter`, а не в `Index Cond` (ADR-046). Проверено ещё раз на 18: под суперпользователем условие в `Index Cond`, под `ma_app` в `Filter` и с явными `uuid_ops`/`array_ops`, и с отдельным `gin (title_bidx)`.
