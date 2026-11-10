@@ -11,7 +11,12 @@ import {
   requestUpload,
 } from "@/lib/api/upload";
 
-import { type FailureCode, initialUploadState, uploadReducer } from "./upload-machine";
+import {
+  type FailureCode,
+  initialUploadState,
+  needsAnotherFile,
+  uploadReducer,
+} from "./upload-machine";
 
 export type DocumentFields = Omit<DocumentCreate, "upload_id">;
 
@@ -107,13 +112,17 @@ export function useUploadFile(file: File, options: Options) {
       });
   }, [uploadId]);
 
-  const save = useCallback(() => dispatch({ type: "save" }), []);
-
   const retry = useCallback(() => {
     if (state.phase.status === "failed" && state.phase.uploadId !== null)
       dispatch({ type: "retrySave" });
     else void startUpload();
   }, [state.phase, startUpload]);
+
+  /** «Сохранить» after a failure a retry can fix is also «Повторить»: the person asked for the outcome. */
+  const save = useCallback(() => {
+    dispatch({ type: "save" });
+    if (state.phase.status === "failed" && !needsAnotherFile(state.phase.code)) retry();
+  }, [state.phase, retry]);
 
   const cancel = useCallback(() => abortRef.current?.abort(), []);
 

@@ -90,6 +90,10 @@ export function uploadReducer(state: UploadState, event: UploadEvent): UploadSta
       ) {
         return { ...state, saveRequested: true };
       }
+      // After a failure that a retry can fix the click is kept: the retry finishes with saving.
+      if (phase.status === "failed" && !FILE_CODES.has(phase.code)) {
+        return { ...state, saveRequested: true };
+      }
       return state;
     case "fieldsRejected":
       if (phase.status !== "saving") return state;

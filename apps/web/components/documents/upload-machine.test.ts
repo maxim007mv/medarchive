@@ -68,6 +68,22 @@ describe("upload state machine (FE-12)", () => {
     expect(done.phase).toEqual({ status: "saving", uploadId: "u2" });
   });
 
+  test("«Сохранить» pressed after the break is kept for the retry", () => {
+    const failed = run(
+      { type: "select" },
+      { type: "progress", percent: 10 },
+      { type: "failed", code: "network" },
+    );
+
+    const asked = uploadReducer(failed, { type: "save" });
+
+    expect(asked.saveRequested).toBe(true);
+    expect(
+      uploadReducer(run({ type: "select" }, { type: "failed", code: "not_pdf" }), { type: "save" })
+        .saveRequested,
+    ).toBe(false);
+  });
+
   test("a failed save keeps the upload, so retry saves the same upload_id", () => {
     const failed = run(
       { type: "select" },
