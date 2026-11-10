@@ -8,7 +8,7 @@ from app.core.deps import Db, Scope, SessionContext, require_scope
 from app.core.errors import ErrorCode, ProblemError, problem_responses
 from app.core.idempotency import Operation, StoredResponse, require_idempotency_key, run_idempotent
 from app.core.ratelimit import EXPORTS_CONTENT, EXPORTS_CREATE, rate_limit
-from app.modules.documents.dependencies import DEFAULT_TIMEZONE, Keys, Storage, today_in
+from app.modules.documents.dependencies import Keys, Storage, UserTimezone, today_in
 from app.modules.exports import service
 from app.modules.exports.schemas import Export, ExportCreate
 
@@ -39,9 +39,10 @@ async def create_export(
     key: Annotated[str, Depends(require_idempotency_key)],
     payload: ExportCreate,
     keys: Keys,
+    user_timezone: UserTimezone,
 ) -> JSONResponse:
     async def execute() -> StoredResponse:
-        export = await service.create_export(db, session, keys, payload, tz=DEFAULT_TIMEZONE)
+        export = await service.create_export(db, session, keys, payload, tz=user_timezone)
         return StoredResponse(
             status=status.HTTP_201_CREATED,
             body=export.model_dump(mode="json"),
@@ -79,9 +80,10 @@ async def export_content(
     session: ExportSession,
     keys: Keys,
     storage: Storage,
+    user_timezone: UserTimezone,
 ) -> StreamingResponse:
     archive = await service.open_archive(
-        db, session, keys, storage, export_id, today=today_in(DEFAULT_TIMEZONE)
+        db, session, keys, storage, export_id, today=today_in(user_timezone)
     )
     return StreamingResponse(
         archive.chunks,

@@ -28,9 +28,9 @@ from app.db.transaction import workspace_tx
 from app.modules.auth import repository as auth_repository
 from app.modules.auth import service as auth_service
 from app.modules.auth.consent import POLICY_VERSION
-from app.modules.auth.schemas import WorkspaceCreate
+from app.modules.auth.schemas import DEFAULT_TIMEZONE, WorkspaceCreate
 from app.modules.documents import service as documents
-from app.modules.documents.dependencies import DEFAULT_TIMEZONE, today_in
+from app.modules.documents.dependencies import today_in
 from app.modules.documents.schemas import DocumentCreate
 from app.modules.uploads import service as uploads
 from app.modules.uploads.schemas import PDF_CONTENT_TYPE, UploadCreate
@@ -79,6 +79,8 @@ async def seed_workspace(
     """Upload each fixture into quarantine and create its document; returns the new ids."""
     async with session_tx(db, session):
         keys = await load_workspace_keys(db, kek, session.workspace_id)
+        timezone = await auth_repository.workspace_timezone(db, session.workspace_id)
+    today = today_in(timezone or DEFAULT_TIMEZONE)
     created = []
     for fixture in fixtures:
         data = fixture.path.read_bytes()
@@ -109,7 +111,7 @@ async def seed_workspace(
                     "document_date": fixture.document_date,
                 }
             ),
-            today=today_in(DEFAULT_TIMEZONE),
+            today=today,
         )
         created.append(document.id)
     return created

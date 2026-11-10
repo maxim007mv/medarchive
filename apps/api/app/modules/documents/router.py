@@ -19,10 +19,10 @@ from app.core.ratelimit import (
 )
 from app.modules.documents import queries, service
 from app.modules.documents.dependencies import (
-    DEFAULT_TIMEZONE,
     Keys,
     PageTokens,
     Storage,
+    UserTimezone,
     today_in,
 )
 from app.modules.documents.filenames import content_disposition
@@ -97,6 +97,7 @@ async def list_documents(
     session: ReadSession,
     keys: Keys,
     page_tokens: PageTokens,
+    user_timezone: UserTimezone,
     q: Annotated[str | None, Query(max_length=100, pattern=QUERY_PATTERN)] = None,
     types: Annotated[TypeList, Query(alias="type")] = None,
     date_field: DateField = "document",
@@ -108,7 +109,7 @@ async def list_documents(
     page_size: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = 50,
     page_token: str | None = None,
 ) -> DocumentList:
-    zone = parse_timezone(tz or DEFAULT_TIMEZONE).key
+    zone = parse_timezone(tz or user_timezone).key
     list_filter = build_filter(
         q=q,
         types=list(types or ()),
@@ -145,10 +146,11 @@ async def create_document(
     payload: DocumentCreate,
     keys: Keys,
     storage: Storage,
+    user_timezone: UserTimezone,
 ) -> JSONResponse:
     async def execute() -> StoredResponse:
         document = await service.create_document(
-            db, session, keys, storage, payload, today=today_in(DEFAULT_TIMEZONE)
+            db, session, keys, storage, payload, today=today_in(user_timezone)
         )
         return StoredResponse(
             status=status.HTTP_201_CREATED,
@@ -207,6 +209,7 @@ async def update_document(
     session: WriteSession,
     payload: DocumentPatch,
     keys: Keys,
+    user_timezone: UserTimezone,
 ) -> JSONResponse:
     document = await service.update_document(
         db,
@@ -215,7 +218,7 @@ async def update_document(
         document_id,
         payload,
         if_match=_require_if_match(request.headers.get("If-Match")),
-        today=today_in(DEFAULT_TIMEZONE),
+        today=today_in(user_timezone),
     )
     return JSONResponse(
         document.model_dump(mode="json"), headers={"ETag": service.etag(document.version)}

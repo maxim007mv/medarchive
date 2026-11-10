@@ -1,11 +1,12 @@
 import hashlib
+import secrets
 from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import unquote
 from zoneinfo import ZoneInfo
 
 import pytest
-from api_stack import Api, create_archive
+from api_stack import CONSENT, Api, create_archive
 from documents_support import (
     SOURCES,
     add_source,
@@ -345,3 +346,27 @@ async def test_delete_is_soft_and_repeat_is_404(api: Api) -> None:
     assert again.status_code == 404
     assert card.status_code == 404
     assert listed.json()["total"] == 0
+
+
+@pytest.mark.parametrize(
+    ("timezone", "status"),
+    [
+        pytest.param("Pacific/Kiritimati", 201, id="ahead"),
+        pytest.param("Pacific/Pago_Pago", 422, id="behind"),
+    ],
+)
+async def test_today_is_the_day_of_the_archive_zone(api: Api, timezone: str, status: int) -> None:
+    # Kiritimati (UTC+14) is always at least a day ahead of Pago Pago (UTC-11).
+    kiritimati_today = datetime.now(ZoneInfo("Pacific/Kiritimati")).date().isoformat()
+    async with api.client() as client:
+        created = await client.post(
+            "/api/v1/workspaces",
+            json={**CONSENT, "timezone": timezone},
+            headers={"Idempotency-Key": secrets.token_hex(16)},
+        )
+        upload_id = await upload(
+            client, created, GENERAL_BLOOD_TEST.path.read_bytes(), GENERAL_BLOOD_TEST.path.name
+        )
+        response = await create_document(client, created, upload_id, document_date=kiritimati_today)
+
+    assert response.status_code == status, response.text
