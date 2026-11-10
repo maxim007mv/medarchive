@@ -72,11 +72,7 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send_with_headers)
         except Exception as exc:
             # Type and frames only: exception messages may quote SQL parameters or field values.
-            log.error(
-                "unhandled_error",
-                error_type=type(exc).__name__,
-                frames=traceback.format_tb(exc.__traceback__),
-            )
+            log.error("unhandled_error", error_type=type(exc).__name__, frames=_app_frames(exc))
             if response_started:
                 raise
             response = problem_response(ErrorCode.INTERNAL, request_id)
@@ -101,6 +97,14 @@ def _request_id(scope: Scope) -> str:
     if incoming and _INCOMING_REQUEST_ID.fullmatch(incoming):
         return incoming
     return "req_" + secrets.token_hex(8)
+
+
+def _app_frames(exc: Exception) -> list[str]:
+    return [
+        f"{frame.filename}:{frame.lineno} {frame.name}"
+        for frame in traceback.extract_tb(exc.__traceback__)
+        if "site-packages" not in frame.filename
+    ]
 
 
 def _route_template(scope: Scope) -> str:

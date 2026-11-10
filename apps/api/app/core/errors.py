@@ -199,6 +199,14 @@ def problem_response(
     )
 
 
+def problem_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+    """`responses=` for a route: the error statuses it declares in openapi.yaml."""
+    return {
+        status: {"description": "Problem", "content": {PROBLEM_MEDIA_TYPE: {}}}
+        for status in statuses
+    }
+
+
 def json_pointer(location: Sequence[int | str]) -> str:
     """Pointer to the offending field: `("body", "consent", "accepted")` -> `/consent/accepted`.
 
