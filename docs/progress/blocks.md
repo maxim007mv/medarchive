@@ -86,6 +86,36 @@ E2E-тесты блоков после 1 (pending, не запускались):
 
 Итог: FAIL. `make lint` красный из-за D-010. 194 падения pytest вызвал сам гейт, а не код: Ryuk из Testcontainers монтирует сокет Docker по пути `~/.docker/run/docker.sock`, который Docker Desktop для macOS смонтировать не может (`mkdir … operation not supported`); исправлено в `36acdc6` (`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` в Makefile, гейт вызывает `make test-api`), проверено на TC-091 для PostgreSQL 17 и 18. Trivy образа web: 2 HIGH в `postcss@8.4.31`, это D-003 в рабочем образе; находок npm больше нет (D-004 подтверждён). Стек через https, жёсткость образов и E2E блока 1 (5 из 5) зелёные.
 
+#### Прогон 11.11.2026 00:08 MSK, `b748c48`: PASS
+
+Коммит `b748c48` «ci(QA-04): gate children do not inherit API stack settings». Стек `medarchive_qa` (браузер `https://localhost:3444`, api :8900), логи `/tmp/medarchive-gate-logs/20261111-0001-b748c48-b1`. Команда `tools/verify_block.sh 1`.
+
+| Шаг | Блокирует | Итог | Подробности | с |
+|---|---|---|---|---|
+| deps: pnpm install | да | pass | exit 0; лог `01-deps-pnpm-install.log` | 1 |
+| deps: uv sync | да | pass | exit 0; лог `02-deps-uv-sync.log` | 0 |
+| make fixtures | да | pass | exit 0; лог `03-make-fixtures.log` | 0 |
+| playwright browsers | да | pass | exit 0; лог `04-playwright-browsers.log` | 1 |
+| make lint | да | pass | exit 0; лог `05-make-lint.log` | 4 |
+| make typecheck | да | pass | exit 0; лог `06-make-typecheck.log` | 10 |
+| make test-api (pytest) | да | pass | 599 passed, 0 failed, 0 skipped (exit 0); лог `07-make-test-api-pytest.log` | 159 |
+| make test-web (vitest) | да | pass | 248 passed, 0 failed, 0 skipped (exit 0); лог `08-make-test-web-vitest.log` | 9 |
+| web build | да | pass | exit 0; лог `09-web-build.log` | 27 |
+| compose up, all services healthy | да | pass | exit 0; api healthy, db healthy, migrate exited(0), minio healthy, minio-init exited(0), redis healthy, tls healthy, web healthy, worker healthy; лог `10-compose-up-all-services-healthy.log` | 56 |
+| hardening (OPS-05, OPS-07) | нет | pass | medarchive/api:qa user=api healthcheck=yes; medarchive/web:qa user=node healthcheck=yes; api read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; web read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; migrate read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; api uid=10001; web uid=1000; api role=ma_app migrate role=ma_owner; app tables not owned | 1 |
+| api with RATE_LIMITS_ENABLED=false | да | pass | exit 0; лог `12-api-with-rate-limits-enabled-false.log` | 16 |
+| e2e @b[1-1]\b, limits off | да | pass | 5 passed, 0 failed, 0 skipped (exit 0); лог `13-e2e-b-1-1-b-limits-off.log` | 6 |
+| api with RATE_LIMITS_ENABLED=true | да | pass | exit 0; лог `14-api-with-rate-limits-enabled-true.log` | 18 |
+| pip-audit (OPS-04) | нет | pass | 52 packages, vulnerabilities []; лог `15-pip-audit-ops-04.log` | 4 |
+| pnpm audit --prod (OPS-04) | нет | pass | info 0, low 0, moderate 0, high 0, critical 0; лог `16-pnpm-audit-prod-ops-04.log` | 1 |
+| gitleaks, git history (OPS-04) | нет | pass | findings by rule [] (values redacted); лог `17-gitleaks-git-history-ops-04.log` | 1 |
+| trivy medarchive/api:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `18-trivy-medarchive-api-qa-ops-04-ops-05.log` | 47 |
+| trivy medarchive/web:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `19-trivy-medarchive-web-qa-ops-04-ops-05.log` | 2 |
+| trivy python:3.12-slim-bookworm (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `20-trivy-python-3-12-slim-bookworm-ops-04-ops-05.log` | 1 |
+| trivy node:22-alpine (OPS-04, OPS-05) | нет | fail | fixable CRITICAL 0 [], HIGH 9 ['CVE-2026-102276', 'CVE-2026-102278', 'CVE-2026-13149', 'CVE-2026-14257', 'CVE-2026-33671']; лог `21-trivy-node-22-alpine-ops-04-ops-05.log` | 1 |
+
+E2E-тесты блоков после 1 (pending, не запускались): 220.
+
 ### Дефекты
 
 | ID | Класс | Владелец | Что | Шаги | Ожидаемо | Фактически | Статус |
@@ -101,11 +131,53 @@ E2E-тесты блоков после 1 (pending, не запускались):
 
 ## Блок 2
 
+#### Прогон 11.11.2026 00:14 MSK, `b748c48`: FAIL
+
+Коммит `b748c48` «ci(QA-04): gate children do not inherit API stack settings». Стек `medarchive_qa` (браузер `https://localhost:3444`, api :8900), логи `/tmp/medarchive-gate-logs/20261111-0008-b748c48-b2`. Команда `tools/verify_block.sh 2`.
+
+| Шаг | Блокирует | Итог | Подробности | с |
+|---|---|---|---|---|
+| deps: pnpm install | да | pass | exit 0; лог `01-deps-pnpm-install.log` | 0 |
+| deps: uv sync | да | pass | exit 0; лог `02-deps-uv-sync.log` | 0 |
+| make fixtures | да | pass | exit 0; лог `03-make-fixtures.log` | 0 |
+| playwright browsers | да | pass | exit 0; лог `04-playwright-browsers.log` | 1 |
+| make lint | да | pass | exit 0; лог `05-make-lint.log` | 7 |
+| make typecheck | да | pass | exit 0; лог `06-make-typecheck.log` | 21 |
+| make test-api (pytest) | да | fail | 445 passed, 155 failed, 0 skipped (exit 2); лог `07-make-test-api-pytest.log` | 140 |
+| make test-web (vitest) | да | pass | 248 passed, 0 failed, 0 skipped (exit 0); лог `08-make-test-web-vitest.log` | 10 |
+| web build | да | pass | exit 0; лог `09-web-build.log` | 29 |
+| compose up, all services healthy | да | pass | exit 0; api healthy, db healthy, migrate exited(0), minio healthy, minio-init exited(0), redis healthy, tls healthy, web healthy, worker healthy; лог `10-compose-up-all-services-healthy.log` | 43 |
+| UI unit tests (FE-03..FE-09) | да | pass | 99 passed, 0 failed, 0 skipped (components/) | 0 |
+| error catalog contract (BE-03) | да | pass | 3 passed, 0 failed, 0 skipped (catalog) | 0 |
+| migrations up/down on PostgreSQL 17 | да | pass | PostgreSQL 17: upgrade head, downgrade base, upgrade head passed; лог `13-migrations-up-down-on-postgresql-17.log` | 5 |
+| migrations up/down on PostgreSQL 18 | да | pass | PostgreSQL 18: upgrade head, downgrade base, upgrade head passed; лог `14-migrations-up-down-on-postgresql-18.log` | 7 |
+| hardening (OPS-05, OPS-07) | нет | pass | medarchive/api:qa user=api healthcheck=yes; medarchive/web:qa user=node healthcheck=yes; api read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; web read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; migrate read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; api uid=10001; web uid=1000; api role=ma_app migrate role=ma_owner; app tables not owned | 1 |
+| api with RATE_LIMITS_ENABLED=false | да | pass | exit 0; лог `16-api-with-rate-limits-enabled-false.log` | 15 |
+| e2e @b[1-2]\b, limits off | да | pass | 5 passed, 0 failed, 0 skipped (exit 0); лог `17-e2e-b-1-2-b-limits-off.log` | 9 |
+| api with RATE_LIMITS_ENABLED=true | да | pass | exit 0; лог `18-api-with-rate-limits-enabled-true.log` | 44 |
+| pip-audit (OPS-04) | нет | pass | 52 packages, vulnerabilities []; лог `19-pip-audit-ops-04.log` | 3 |
+| pnpm audit --prod (OPS-04) | нет | pass | info 0, low 0, moderate 0, high 0, critical 0; лог `20-pnpm-audit-prod-ops-04.log` | 1 |
+| gitleaks, git history (OPS-04) | нет | pass | findings by rule [] (values redacted); лог `21-gitleaks-git-history-ops-04.log` | 8 |
+| trivy medarchive/api:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `22-trivy-medarchive-api-qa-ops-04-ops-05.log` | 15 |
+| trivy medarchive/web:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `23-trivy-medarchive-web-qa-ops-04-ops-05.log` | 4 |
+| trivy python:3.12-slim-bookworm (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `24-trivy-python-3-12-slim-bookworm-ops-04-ops-05.log` | 2 |
+| trivy node:22-alpine (OPS-04, OPS-05) | нет | fail | fixable CRITICAL 0 [], HIGH 9 ['CVE-2026-102276', 'CVE-2026-102278', 'CVE-2026-13149', 'CVE-2026-14257', 'CVE-2026-33671']; лог `25-trivy-node-22-alpine-ops-04-ops-05.log` | 2 |
+
+| TC | Итог | Тесты |
+|---|---|---|
+| TC-091 | нет теста | - |
+| TC-092 | нет теста | - |
+
+E2E-тесты блоков после 2 (pending, не запускались): 220.
+
+Итог: FAIL, но вердикт TC неверный по вине гейта: шаблон TC не находил `test_tc091_…` (подчёркивание перед `tc`), а тесты TC-091 и TC-092 есть (`apps/api/tests/db`, прогон блока 1 на том же коммите: все зелёные). Исправлено в следующем коммите гейта. 155 ошибок setup интеграционных тестов: MinIO из Testcontainers не опубликовал порт 9000 вовремя (D-013). Миграции на PostgreSQL 17 и 18, контракт каталога ошибок и UI unit-тесты зелёные.
+
 ### Дефекты
 
 | ID | Класс | Владелец | Что | Шаги | Ожидаемо | Фактически | Статус |
 |---|---|---|---|---|---|---|---|
 | D-011 | окружение, ломает E2E всех стеков | BACKEND-CORE, BACKEND-DOCUMENTS, DB | Утечка контейнеров Testcontainers: 10.11.2026 23:40 запущено 40 контейнеров с меткой `org.testcontainers=true` (33 `pgsty/minio`, 5 `postgres:17-alpine`, 2 `redis:7-alpine`), старшим около 50 минут. Фикстуры сессии останавливают контейнер только при нормальном завершении pytest, а прогоны идут с `TESTCONTAINERS_RYUK_DISABLED=true` (`docs/progress/backend-core.md`), поэтому прерванный прогон оставляет контейнеры навсегда | `docker ps --filter label=org.testcontainers=true`; `docker run --rm alpine free -m` | После прогонов контейнеров Testcontainers нет | В виртуальной машине Docker 6,8 из 7,8 ГБ занято, swap 1 из 1 ГБ; ядро убивает по OOM `api` и `minio` стенда E2E (`OOMKilled=true`, код 137) посреди прогона, тесты падают с 502 и 503 `storage_unavailable`. Ryuk на этой машине не помогает: с сокетом виртуальной машины его порт 8080 под нагрузкой не публикуется вовремя (`Port mapping … 8080 is not available`, затем конфликт имени `testcontainers-ryuk-…`; гейт `e3cdd4a`: 255 ошибок setup), поэтому с `TESTCONTAINERS_RYUK_DISABLED=true` в Makefile работаем без него. Нужно: не прерывать прогоны pytest (фикстуры останавливают контейнеры при нормальном завершении), гонять тесты через `make test-api`; когда ни один прогон не идёт, убрать утёкшие: `docker rm -f $(docker ps -q --filter label=org.testcontainers=true)`. Чужие контейнеры агент QA не останавливает | открыт |
+| D-013 | флаки окружения | BACKEND-DOCUMENTS | `apps/api/tests/integration/conftest.py`, `_start_minio`: на Docker Desktop под нагрузкой порт 9000 контейнера MinIO публикуется с задержкой; после `STARTUP_ATTEMPTS` попыток фикстура сессии падает, и все интеграционные тесты получают ошибку setup | Гейт блока 2 на `b748c48` (`make test-api`) | Интеграционные тесты стабильны | 155 ошибок `ConnectionError: Port mapping for container … and port 9000 is not available`; на том же коммите в прогоне блока 1 тех же ошибок не было. Предложение: ждать публикации порта с таймаутом (опрос `get_exposed_port`), а не пересоздавать контейнер | открыт |
 
 ## Блок 3
 

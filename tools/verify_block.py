@@ -72,7 +72,8 @@ RATE_LIMIT_TCS = ("TC-082", "TC-098")
 HARDENING_BLOCK = 7
 # AI suggestion is out of the prototype's scope (ADR-042).
 OUT_OF_SCOPE = range(100, 105)
-TC_PATTERN = re.compile(r"\bTC[-_ ]?(\d{3}b?)", re.IGNORECASE)
+# Not after a letter, so `test_tc091_…` and `@TC-093` match and `ETC-1234` does not.
+TC_PATTERN = re.compile(r"(?<![a-z])TC[-_ ]?(\d{3}b?)(?!\d)", re.IGNORECASE)
 
 Summary = Callable[[subprocess.CompletedProcess[str]], tuple[bool, str]]
 
