@@ -99,6 +99,23 @@ services:
       minio-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
 
+  # BE-13: deletes what the API only marked or let expire; never decrypts, so no KEK.
+  worker:
+    <<: [*api-image, *hardening]
+    command: ["python", "-m", "app.workers.purge"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ma_worker:${MA_WORKER_PASSWORD}@db:5432/medarchive
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_QUARANTINE: ma-quarantine
+      S3_BUCKET_DOCS: ma-docs
+    # The image's HEALTHCHECK probes the API port, which the worker does not open.
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      minio-init: { condition: service_completed_successfully }
+
   web:
     <<: *hardening
     build:
@@ -107,6 +124,9 @@ services:
       args:
         API_ORIGIN: http://api:8000
     image: medarchive/web:${IMAGE_TAG:-local}
+    environment:
+      # CSP connect-src: the browser uploads to storage with presigned POST (apps/web/middleware.ts).
+      S3_PUBLIC_ENDPOINT: http://localhost:${MINIO_PORT:-9000}
     tmpfs: [/tmp, /app/apps/web/.next/cache]
     ports: ["127.0.0.1:${WEB_PORT:-3000}:3000"]
     depends_on:
