@@ -212,6 +212,22 @@ describe("UploadDialog (FE-12)", () => {
     expect(screen.getByLabelText("Название")).toHaveValue("General blood test 2");
   });
 
+  test("closing the dialog mid-transfer aborts the storage upload", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    const { unmount } = render(
+      <Wrapper client={makeQueryClient()}>
+        <UploadDialog initialFiles={[pdfFile()]} onSaved={vi.fn()} onClose={vi.fn()} />
+      </Wrapper>,
+    );
+    await waitFor(() => expect(FakeXhr.instances).toHaveLength(1));
+    act(() => FakeXhr.last.progress(40));
+    const abort = vi.spyOn(FakeXhr.last, "abort");
+
+    unmount();
+
+    expect(abort).toHaveBeenCalledOnce();
+  });
+
   test("several files go one by one: «Файл 1 из 2», «Сохранить и следующий»", async () => {
     mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
     setup([pdfFile("01-a.pdf"), pdfFile("02-b.pdf")]);
