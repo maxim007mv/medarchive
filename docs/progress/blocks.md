@@ -1141,6 +1141,128 @@ E2E-тесты блоков после 7 (pending, не запускались):
 
 Итог: FAIL по двум причинам, обе исправлены до следующего прогона. 1) D-015: ядро по лимиту памяти контейнера api (1 ГиБ) убило воркеры uvicorn посреди E2E, `app.serve` после этого останавливал весь API; отсюда 500 на `POST /workspaces` у 133 тестов, `connection refused` у schemathesis и один запрос k6. 2) D-016: эталонов TC-115 в репозитории не было, Playwright записывал их в первом повторе и падал. Все шаги безопасности зелёные и теперь блокируют: Trivy 0 fixable HIGH и CRITICAL у `medarchive/api:qa`, `medarchive/web:qa`, `python:3.12-slim-bookworm` и `medarchive/node-runtime:22-alpine` (D-004), pip-audit, `pnpm audit --prod`, gitleaks, ZAP без High и Medium, ПДн 0 из 19. k6 отдельно на тихом стеке: до правок list p95 600 мс, search 612 мс; после `6a7e370` и исправления D-015 на стеке `medarchive_qa`: 223 и 232 мс.
 
+#### Прогон 11.11.2026 12:03 MSK, `b75f022`: FAIL
+
+Коммит `b75f022` «docs(QA-08): block 7 run on dfb45e7 annotated, D-015 and D-016». Стек `medarchive_qa` (браузер `https://localhost:3444`, api :8900), логи `/tmp/medarchive-gate-logs/20261111-1146-b75f022-b7`. Команда `tools/verify_block.sh 7`.
+
+| Шаг | Блокирует | Итог | Подробности | с |
+|---|---|---|---|---|
+| deps: pnpm install | да | pass | exit 0; лог `01-deps-pnpm-install.log` | 1 |
+| deps: uv sync | да | pass | exit 0; лог `02-deps-uv-sync.log` | 0 |
+| make fixtures | да | pass | exit 0; лог `03-make-fixtures.log` | 1 |
+| playwright browsers | да | pass | exit 0; лог `04-playwright-browsers.log` | 1 |
+| make lint | да | pass | exit 0; лог `05-make-lint.log` | 5 |
+| make typecheck | да | pass | exit 0; лог `06-make-typecheck.log` | 22 |
+| make test-api (pytest) | да | pass | 664 passed, 0 failed, 0 skipped (exit 0); лог `07-make-test-api-pytest.log` | 331 |
+| make test-web (vitest) | да | pass | 315 passed, 0 failed, 0 skipped (exit 0); лог `08-make-test-web-vitest.log` | 11 |
+| web build | да | pass | exit 0; лог `09-web-build.log` | 23 |
+| compose up, all services healthy | да | pass | exit 0; api healthy, db healthy, migrate exited(0), minio healthy, minio-init exited(0), redis healthy, tls healthy, web healthy, worker healthy; лог `10-compose-up-all-services-healthy.log` | 52 |
+| UI unit tests (FE-03..FE-09) | да | pass | 124 passed, 0 failed, 0 skipped (components/) | 0 |
+| error catalog contract (BE-03) | да | pass | 3 passed, 0 failed, 0 skipped (catalog) | 0 |
+| migrations up/down on PostgreSQL 17 | да | pass | PostgreSQL 17: upgrade head, downgrade base, upgrade head passed; лог `13-migrations-up-down-on-postgresql-17.log` | 5 |
+| migrations up/down on PostgreSQL 18 | да | pass | PostgreSQL 18: upgrade head, downgrade base, upgrade head passed; лог `14-migrations-up-down-on-postgresql-18.log` | 5 |
+| hardening (OPS-05, OPS-07) | да | pass | medarchive/api:qa user=api healthcheck=yes; medarchive/web:qa user=node healthcheck=yes; api read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; web read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; migrate read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; api uid=10001; web uid=1000; api role=ma_app migrate role=ma_owner; app tables not owned | 1 |
+| api with RATE_LIMITS_ENABLED=false | да | pass | exit 0; лог `16-api-with-rate-limits-enabled-false.log` | 13 |
+| e2e @b[1-7]\b, limits off | да | fail | 623 passed, 1 failed, 0 skipped (exit 1); лог `17-e2e-b-1-7-b-limits-off.log` | 333 |
+| schemathesis --checks all | да | pass | 21 passed, 0 failed, 0 skipped (exit 0); лог `18-schemathesis-checks-all.log` | 11 |
+| k6 GET /documents p95 < 300 ms, 50 VU, 1000 docs | да | pass | documents.list p95 173 ms, documents.search p95 182 ms, 5xx rate 0.0000, checks 1.0000, requests 37789; лог `19-k6-get-documents-p95-300-ms-50-vu-1000-docs.log` | 88 |
+| api with RATE_LIMITS_ENABLED=true | да | pass | exit 0; лог `20-api-with-rate-limits-enabled-true.log` | 14 |
+| e2e TC-082, TC-098, limits on | да | pass | 3 passed, 0 failed, 0 skipped (exit 0); лог `21-e2e-tc-082-tc-098-limits-on.log` | 12 |
+| PII scan: logs and DB dump (TC-096) | да | pass | 19 markers; in logs 0, in DB plaintext 0, dump 19370052 bytes | 1 |
+| ZAP baseline, no High | да | pass | High []; Medium []; Low ['Cross-Origin-Resource-Policy Header Missing or Invalid', 'Permissions Policy Header Not Set', 'X-Content-Type-Options Header Missing']; лог `23-zap-baseline-no-high.log` | 60 |
+| pip-audit (OPS-04) | да | pass | 52 packages, vulnerabilities []; лог `24-pip-audit-ops-04.log` | 12 |
+| pnpm audit --prod (OPS-04) | да | pass | info 0, low 0, moderate 0, high 0, critical 0; лог `25-pnpm-audit-prod-ops-04.log` | 1 |
+| gitleaks, git history (OPS-04) | да | pass | 287 commits scanned, findings by rule [] (values redacted); лог `26-gitleaks-git-history-ops-04.log` | 4 |
+| node-runtime base image | да | pass | exit 0; лог `27-node-runtime-base-image.log` | 3 |
+| trivy medarchive/api:qa (OPS-04, OPS-05) | да | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `28-trivy-medarchive-api-qa-ops-04-ops-05.log` | 11 |
+| trivy medarchive/web:qa (OPS-04, OPS-05) | да | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `29-trivy-medarchive-web-qa-ops-04-ops-05.log` | 1 |
+| trivy python:3.12-slim-bookworm (OPS-04, OPS-05) | да | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `30-trivy-python-3-12-slim-bookworm-ops-04-ops-05.log` | 0 |
+| trivy medarchive/node-runtime:22-alpine (OPS-04, OPS-05) | да | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `31-trivy-medarchive-node-runtime-22-alpine-ops-04-ops-05.log` | 0 |
+
+| TC | Итог | Тесты |
+|---|---|---|
+| TC-001 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-002 | pass | e2e:api passed, e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-003 | pass | e2e:api passed, pytest passed |
+| TC-004 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-010 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-011 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-012 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-013 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-014 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-015 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-016 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-017 | pass | pytest passed |
+| TC-018 | pass | pytest passed |
+| TC-019 | pass | e2e:api passed, e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-020 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-021 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-022 | pass | e2e:api passed, pytest passed |
+| TC-023 | pass | e2e:api passed, pytest passed |
+| TC-024 | pass | e2e:api passed, pytest passed |
+| TC-030 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-031 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-032 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-033 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-034 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-035 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-036 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-037 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-038 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-039 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-040 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-041 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-042 | pass | e2e:api passed, pytest passed |
+| TC-043 | pass | e2e:api passed, pytest passed |
+| TC-044 | pass | pytest passed |
+| TC-044b | pass | vitest passed |
+| TC-050 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-051 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-052 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-053 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-054 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-055 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-056 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-057 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-058 | pass | e2e:api passed, pytest passed |
+| TC-059 | pass | e2e:api passed, pytest passed |
+| TC-060 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-070 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-071 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-072 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-073 | pass | pytest passed |
+| TC-080 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-081 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-082 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-083 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-084 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-085 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-090 | pass | e2e:api passed, pytest passed |
+| TC-091 | pass | pytest passed |
+| TC-092 | pass | pytest passed |
+| TC-093 | pass | e2e:api passed, pytest passed, vitest passed |
+| TC-094 | pass | e2e:api passed, e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-095 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-096 | pass | gate passed, pytest passed |
+| TC-096b | pass | e2e:api passed |
+| TC-097 | pass | e2e:api passed, pytest passed |
+| TC-098 | pass | e2e:api passed |
+| TC-099 | pass | pytest passed |
+| TC-110 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-111 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-112 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-113 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-114 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-115 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, e2e:webkit-iphone13 passed |
+| TC-116 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-117 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-118 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-119 | pass | vitest passed |
+
+E2E-тесты блоков после 7 (pending, не запускались): 36.
+
+Итог: FAIL только на TC-115: один из трёх повторов WebKit `D02-upload-dark` (3% пикселей, скролл листа формы). k6 list/search p95 173 и 182 мс; schemathesis, ZAP, Trivy app и `medarchive/node-runtime` — pass. Исправление скролла перед снимком и переснятые эталоны — в следующем коммите.
+
 ### Дефекты
 
 | ID | Класс | Владелец | Что | Шаги | Ожидаемо | Фактически | Статус |

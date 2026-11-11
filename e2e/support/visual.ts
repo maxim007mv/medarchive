@@ -19,6 +19,12 @@ function unstableRegions(page: Page): Locator[] {
  */
 export async function expectScreen(page: Page, name: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
+  // WebKit scrolls a sheet to its focused field by a few pixels more or less from run to run.
+  await page.evaluate(() => {
+    for (const element of document.querySelectorAll<HTMLElement>('[role="dialog"], [role="dialog"] *')) {
+      if (element.scrollTop) element.scrollTop = 0;
+    }
+  });
   await expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true, mask: unstableRegions(page) });
 }
 
