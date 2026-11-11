@@ -55,7 +55,8 @@ WEB_URL = "https://localhost:3444"
 API_URL = "http://localhost:8900"
 POLICY_VERSION = "2026-11-10"
 XSS_TITLE = "<img src=x onerror=alert(1)>"
-BASE_IMAGES = ["python:3.12-slim-bookworm", "node:22-alpine"]
+# Cleaned Node runtime (npm removed), not the raw library tag (D-004 / OPS-05).
+BASE_IMAGES = ["python:3.12-slim-bookworm", "medarchive/node-runtime:22-alpine"]
 
 # TC ranges each block adds to its gate; gates are cumulative (block N checks blocks 1..N).
 BLOCK_TC_RANGES: dict[int, list[tuple[int, int]]] = {
@@ -563,14 +564,20 @@ def run_supply_chain(gate: Gate) -> None:
         blocking=blocking,
         summarize=lambda done: gitleaks(done, reports / "gitleaks.json"),
     )
-    # The images we ship block; raw base images are reported only: the web image removes npm,
-    # where all fixable findings of node:22-alpine live (D-004).
+    # App images and cleaned bases (python slim, node-runtime without npm) block from
+    # HARDENING_BLOCK; build the Node runtime pin before scanning it (D-004 / OPS-05).
+    gate.make(
+        "node-runtime base image",
+        "node-runtime",
+        blocking=blocking,
+        summarize=lambda done: (done.returncode == 0, f"exit {done.returncode}"),
+    )
     for image in ["medarchive/api:qa", "medarchive/web:qa", *BASE_IMAGES]:
         report = reports / f"trivy-{image.replace('/', '-').replace(':', '-')}.json"
         gate.make(
             f"trivy {image} (OPS-04, OPS-05)",
             "trivy",
-            blocking=blocking and image not in BASE_IMAGES,
+            blocking=blocking,
             summarize=partial(trivy, report=report),
             IMAGE=image,
         )
