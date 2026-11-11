@@ -1,5 +1,7 @@
 import io
 import secrets
+import tempfile
+import tracemalloc
 
 import httpx
 import pytest
@@ -62,6 +64,21 @@ def test_upload_open_list_delete_roundtrip(storage: ObjectStorage) -> None:
     storage.docs.delete("ws/1/doc.bin")
     assert storage.docs.size("ws/1/doc.bin") is None
     assert list(storage.docs.list("ws/1/")) == []
+
+
+def test_upload_of_20_mib_file_streams_from_disk(storage: ObjectStorage) -> None:
+    with tempfile.TemporaryFile() as source:
+        source.write(bytes(20 * 1024 * 1024))
+        source.seek(0)
+        tracemalloc.start()
+        try:
+            storage.docs.upload("ws/1/big.bin", source)
+            _, peak_bytes = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+
+    assert storage.docs.size("ws/1/big.bin") == 20 * 1024 * 1024
+    assert peak_bytes < 8 * 1024 * 1024
 
 
 def test_download_to_file(storage: ObjectStorage) -> None:

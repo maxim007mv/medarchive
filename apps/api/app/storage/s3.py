@@ -74,8 +74,12 @@ class Bucket:
             self._client.download_fileobj(self.name, key, destination)
 
     def upload(self, key: str, source: IO[bytes]) -> None:
+        """One PUT streamed from `source` (objects are at most 20 MiB plus Tink overhead).
+
+        upload_fileobj would split it into 8 MiB parts and read them all into memory at once.
+        """
         with _unavailable_on_error():
-            self._client.upload_fileobj(source, self.name, key)
+            self._client.put_object(Bucket=self.name, Key=key, Body=source)
 
     def open(self, key: str) -> BinaryIO:
         """Readable stream of the whole object; the caller closes it."""
