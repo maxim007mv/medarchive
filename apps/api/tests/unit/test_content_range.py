@@ -39,7 +39,7 @@ def _collect(data: bytes, byte_range: ByteRange | None) -> bytes:
     return b"".join(iter_bytes(BytesIO(data), byte_range))
 
 
-DATA = bytes(range(256)) * 50
+DATA = bytes(range(256)) * 1024
 
 
 @pytest.mark.parametrize(
@@ -62,3 +62,9 @@ def test_iter_bytes_whole_stream_and_closes_it() -> None:
 
     assert b"".join(iter_bytes(stream, None)) == DATA
     assert stream.closed
+
+
+def test_iter_bytes_streams_a_20_mib_file_in_at_most_320_chunks() -> None:
+    chunks = list(iter_bytes(BytesIO(bytes(20 * 1024 * 1024)), None))
+
+    assert len(chunks) <= 320

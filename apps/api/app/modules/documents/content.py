@@ -5,8 +5,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import IO
 
-# One segment of AES256_GCM_HKDF_4KB: Tink releases plaintext only per authenticated segment.
-CHUNK_BYTES = 4096
+# Each chunk costs a thread hop and an ASGI send (zipstream passes chunks through unchanged):
+# 4 KiB chunks held a download at about 44 MiB/s of server CPU, 64 KiB at about 550 MiB/s.
+CHUNK_BYTES = 64 * 1024
 _SINGLE_RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
