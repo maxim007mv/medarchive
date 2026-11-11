@@ -179,7 +179,11 @@ test("FE-06: unmounting on close still returns focus to the opener", async () =>
       <>
         <Button onClick={() => setOpen(true)}>{texts["header.export"]}</Button>
         {open && (
-          <Dialog open onOpenChange={(next) => !next && setOpen(false)} title={texts["export.title"]}>
+          <Dialog
+            open
+            onOpenChange={(next) => !next && setOpen(false)}
+            title={texts["export.title"]}
+          >
             <Button onClick={() => setOpen(false)}>{texts["common.cancel"]}</Button>
           </Dialog>
         )}
