@@ -151,7 +151,7 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
       await expect(
         page.getByRole("button", { name: "Изменить описание" }),
       ).toBeVisible();
-      await page.getByRole("link", { name: "Все документы" }).click();
+      await page.getByRole("link", { name: "К документам" }).click();
       await expect(rows(page)).toHaveCount(6);
       await expect(row(page, "ЭКГ покоя").getByText("Не указана")).toHaveCount(
         0,
@@ -275,7 +275,7 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
   );
 
   test(
-    "TC-050 «Все документы» returns to the list with its filters",
+    "TC-050 «К документам» returns to the list with its filters",
     { tag: ["@b5", "@P0", "@TC-050"] },
     async ({ page }) => {
       await page
@@ -286,7 +286,7 @@ test.describe("document, note, edit, delete (FE-16..FE-19)", () => {
         .getByRole("link", { name: "Общий анализ крови" })
         .click();
 
-      await page.getByRole("link", { name: "Все документы" }).click();
+      await page.getByRole("link", { name: "К документам" }).click();
 
       await expect(page).toHaveURL(/q=/);
       await expect(page.getByText("2 из 6", { exact: true })).toBeVisible();

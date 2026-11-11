@@ -25,6 +25,7 @@ import { t, texts } from "@/lib/texts";
 
 import { AccessKeyDialog } from "./AccessKeyDialog";
 import { AppHeader } from "./AppHeader";
+import { BackLink } from "./BackLink";
 import { OfflineBanner, useOfflineReason } from "./OfflineBanner";
 import { useProblem } from "./use-problem";
 
@@ -90,6 +91,7 @@ export function SettingsScreen() {
       <>
         <AppHeader />
         <main className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-12">
+          <BackLink className="-ml-3" />
           <h1 className="text-h1">{texts["settings.danger.title"]}</h1>
           <p role="status" className="text-body-l">
             {t("settings.danger.done", { date, time })}
@@ -126,6 +128,7 @@ export function SettingsScreen() {
       <AppHeader />
       <OfflineBanner />
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-12">
+        <BackLink className="-ml-3" />
         <h1 className="text-h1">{texts["settings.title"]}</h1>
         {problem && <Alert variant="danger" title={problem.title} />}
 

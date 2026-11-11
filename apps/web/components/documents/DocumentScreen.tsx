@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Download, ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -15,7 +15,7 @@ import { formatDate, formatDateTime, formatSize } from "@/lib/format";
 import { errorTitles, t, texts } from "@/lib/texts";
 
 import { AppHeader } from "./AppHeader";
-import { LIST_URL_KEY } from "./ArchiveScreen";
+import { BackLink, useListHref } from "./BackLink";
 import { NotePanel } from "./NotePanel";
 import { OfflineBanner, useOfflineReason } from "./OfflineBanner";
 import { contentUrl, PdfViewer } from "./PdfViewer";
@@ -25,13 +25,6 @@ import { useProblem } from "./use-problem";
 // Loaded on first use: the form with its validation is not needed to read the document.
 const EditPanel = dynamic(() => import("./EditPanel").then((module) => module.EditPanel));
 const DeleteDialog = dynamic(() => import("./DeleteDialog").then((module) => module.DeleteDialog));
-
-/** «Все документы» goes back to the list with the filters it was opened from (FE-16). */
-function useBackHref(): string {
-  const [href, setHref] = useState("/");
-  useEffect(() => setHref(sessionStorage.getItem(LIST_URL_KEY) ?? "/"), []);
-  return href;
-}
 
 function LinkButton({
   href,
@@ -65,7 +58,7 @@ export function DocumentScreen({ id }: { id: string }) {
   const router = useRouter();
   const session = useSession();
   const document = useDocument(id);
-  const backHref = useBackHref();
+  const backHref = useListHref();
   const problem = useProblem(document.error);
 
   useEffect(() => {
@@ -77,22 +70,25 @@ export function DocumentScreen({ id }: { id: string }) {
       <AppHeader showSettings />
       <OfflineBanner />
       {isApiError(document.error, "not_found") ? (
-        <main className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-16 text-center">
-          <h1 className="text-h2">{errorTitles.not_found}</h1>
-          <Link href={backHref} className={buttonClasses({ variant: "primary" })}>
-            {texts["doc.notFound.back"]}
-          </Link>
+        <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-12">
+          <BackLink className="-ml-3" />
+          <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <h1 className="text-h2">{errorTitles.not_found}</h1>
+            <Link href={backHref} className={buttonClasses({ variant: "primary" })}>
+              {texts["doc.notFound.back"]}
+            </Link>
+          </div>
         </main>
       ) : document.data ? (
         <DocumentView
           current={document.data}
           timeZone={session.data?.timezone ?? browserTimeZone()}
-          backHref={backHref}
           onDeleted={() => router.push(backHref)}
         />
       ) : (
         problem && (
-          <main className="px-4 py-8">
+          <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-12">
+            <BackLink className="-ml-3" />
             <Alert variant="danger" title={problem.title} />
           </main>
         )
@@ -104,12 +100,10 @@ export function DocumentScreen({ id }: { id: string }) {
 function DocumentView({
   current,
   timeZone,
-  backHref,
   onDeleted,
 }: {
   current: DocumentWithEtag;
   timeZone: string;
-  backHref: string;
   onDeleted: () => void;
 }) {
   const { document } = current;
@@ -123,12 +117,7 @@ function DocumentView({
     <main className="flex flex-col lg:min-h-0 lg:flex-1 lg:flex-row">
       <div className="border-border flex min-h-0 flex-col lg:flex-1 lg:border-r">
         <div className="border-border flex h-12 items-center gap-2 border-b px-4">
-          <Link href={backHref} className={buttonClasses({ variant: "tertiary", size: "sm" })}>
-            <span className="inline-flex items-center gap-2">
-              <ArrowLeft size={16} strokeWidth={1.75} aria-hidden />
-              {texts["doc.back"]}
-            </span>
-          </Link>
+          <BackLink />
           <div className="ml-auto lg:hidden">
             <RowMenu
               label={texts["doc.more"]}

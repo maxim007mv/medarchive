@@ -28,6 +28,7 @@ import { EmptyArchive } from "./EmptyArchive";
 import { EmptySearch } from "./EmptySearch";
 import { ListSkeleton } from "./ListSkeleton";
 import { listSubtitle, undatedHint } from "./list-texts";
+import { LIST_URL_KEY } from "./list-url";
 import { OfflineBanner, useOfflineReason } from "./OfflineBanner";
 import { Toolbar } from "./Toolbar";
 import { useListFilters } from "./use-list-filters";
@@ -42,9 +43,6 @@ const AccessKeyDialog = dynamic(() =>
 
 /** `--dur-highlight` of tokens.json: how long a new row stays lit. */
 const HIGHLIGHT_MS = 1200;
-/** Where «Все документы» on the document page returns to, filters included (FE-16). */
-export const LIST_URL_KEY = "medarchive:list-url";
-
 type Props = {
   session: Session;
   /** Files chosen on onboarding, before the archive existed. */
