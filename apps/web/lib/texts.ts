@@ -79,7 +79,7 @@ export const texts = {
   "type.other": "Другое",
   "upload.date.label": "Дата документа",
   "upload.date.placeholder": "дд.мм.гггг",
-  "upload.date.info.label": "Что такое дата документа",
+  "upload.date.info.label": "Что это за дата",
   "upload.date.info": "Дата, которая стоит в самом документе: когда сдали анализ или были на приёме у врача. По ней сортируется список. Дату загрузки мы запишем автоматически.",
   "upload.date.fromFileName": "Дата взята из имени файла, проверьте",
   "upload.date.fromPdf": "Дата взята из свойств PDF, проверьте",

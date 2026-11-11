@@ -103,7 +103,7 @@ test.describe("document date in the form (owner's decision 11.11.2026)", () => {
     async ({ page }) => {
       const dialog = await openWith(page, pdfPayload(source.fileName));
       const info = dialog.getByRole("button", {
-        name: "Что такое дата документа",
+        name: "Что это за дата",
       });
       const explanation = page.getByRole("tooltip");
 

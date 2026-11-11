@@ -266,7 +266,7 @@ describe("UploadDialog (FE-12)", () => {
   test("TC-117: the «i» explains the document date on focus, hover and tap; Esc closes it", async () => {
     mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
     const { user } = setup([pdfFile()]);
-    const info = screen.getByRole("button", { name: "Что такое дата документа" });
+    const info = screen.getByRole("button", { name: "Что это за дата" });
     const explanation = /^Дата, которая стоит в самом документе/;
 
     act(() => info.focus());
