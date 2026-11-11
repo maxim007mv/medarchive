@@ -11,9 +11,12 @@ x-hardening: &hardening
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
 
+# mem_limit: at least twice the peak seen under the QA gate (api 430 MiB, minio 325 MiB, web 95 MiB,
+# worker 90 MiB, db 75 MiB), so a runaway service is killed alone instead of the Docker VM (D-011).
 services:
   db:
     image: postgres:17-alpine
+    mem_limit: 1g
     environment:
       POSTGRES_DB: medarchive
       POSTGRES_USER: postgres
@@ -33,6 +36,7 @@ services:
   minio:
     # Official minio/minio images are no longer published; pgsty/minio is the maintained fork.
     image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    mem_limit: 1g
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?run make secrets}
@@ -65,8 +69,11 @@ services:
 
   redis:
     image: redis:7-alpine
-    # Rate-limit counters only: nothing worth persisting.
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    mem_limit: 128m
+    # Rate-limit counters only: nothing worth persisting. Every key has a TTL, so past maxmemory
+    # the soonest to expire go first instead of the container being killed.
+    command:
+      ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "volatile-ttl"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -83,6 +90,7 @@ services:
 
   api:
     <<: [*api-image, *hardening]
+    mem_limit: 1g
     environment:
       DATABASE_URL: postgresql+asyncpg://ma_app:${MA_APP_PASSWORD}@db:5432/medarchive
       REDIS_URL: redis://redis:6379/0
@@ -111,6 +119,7 @@ services:
   # BE-13: deletes what the API only marked or let expire; never decrypts, so no KEK.
   worker:
     <<: [*api-image, *hardening]
+    mem_limit: 256m
     command: ["python", "-m", "app.workers.purge"]
     environment:
       DATABASE_URL: postgresql+asyncpg://ma_worker:${MA_WORKER_PASSWORD}@db:5432/medarchive
@@ -141,9 +150,12 @@ services:
       args:
         API_ORIGIN: http://api:8000
     image: medarchive/web:${IMAGE_TAG:-local}
+    mem_limit: 512m
     environment:
       # CSP connect-src: the browser uploads to storage with presigned POST (apps/web/middleware.ts).
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_PORT:-9000}}
+      # Half of mem_limit: V8 collects before the container limit is reached.
+      NODE_OPTIONS: --max-old-space-size=256
     tmpfs: [/tmp, /app/apps/web/.next/cache]
     networks:
       default:
@@ -157,6 +169,7 @@ services:
   tls:
     <<: *hardening
     image: caddy:2.11.9-alpine
+    mem_limit: 256m
     profiles: [tls]
     user: "65534:65534"
     tmpfs: ["/tmp", "/data:mode=1777", "/config:mode=1777"]
