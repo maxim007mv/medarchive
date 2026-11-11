@@ -171,3 +171,28 @@ test("FE-06: when the opener is gone, focus goes to finalFocus instead of the pa
 
   expect(screen.getByRole("heading", { name: texts["list.title"] })).toHaveFocus();
 });
+
+test("FE-06: unmounting on close still returns focus to the opener", async () => {
+  function UnmountOnClose() {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <Button onClick={() => setOpen(true)}>{texts["header.export"]}</Button>
+        {open && (
+          <Dialog open onOpenChange={(next) => !next && setOpen(false)} title={texts["export.title"]}>
+            <Button onClick={() => setOpen(false)}>{texts["common.cancel"]}</Button>
+          </Dialog>
+        )}
+      </>
+    );
+  }
+
+  render(<UnmountOnClose />);
+  const opener = screen.getByRole("button", { name: texts["header.export"] });
+  await userEvent.click(opener);
+  await userEvent.click(screen.getByRole("button", { name: texts["common.cancel"] }));
+  await nextTask();
+
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
+});

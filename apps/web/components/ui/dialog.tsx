@@ -60,14 +60,22 @@ export function Dialog({
 
   // Capture the opener before Radix moves focus (onOpenAutoFocus already sees the dialog).
   // Cleanup runs before the next dialog's layout effect in the same commit, so a hand-off
-  // inherits this return target instead of finalFocus.
+  // inherits this return target instead of finalFocus. A parent that unmounts on close (export,
+  // upload) never flips `open` to false, so Radix skips onCloseAutoFocus — restore here.
   useLayoutEffect(() => {
     if (!open) return;
     returnFocusTo.current = handOff ? closedDialogReturnTo : document.activeElement;
     return () => {
       closedDialogReturnTo = returnFocusTo.current;
+      const target = returnFocusTo.current;
+      const fallback = finalFocus?.current;
+      queueMicrotask(() => {
+        if (document.activeElement?.closest('[role="dialog"]')) return;
+        if (isFocusable(target)) target.focus();
+        else fallback?.focus();
+      });
     };
-  }, [open, handOff]);
+  }, [open, handOff, finalFocus]);
 
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
