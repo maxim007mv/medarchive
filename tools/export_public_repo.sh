@@ -36,7 +36,9 @@ esac
 [[ ! -e $out ]] || { echo "$out already exists" >&2; exit 1; }
 
 mkdir "$out"
-git -C "$repo" archive "$commit" | tar -x -C "$out"
+# Editor and agent settings (.cursor/, .cursorignore, .cursorrules) stay out of the public copy.
+git -C "$repo" archive "$commit" -- . ':(exclude,glob)**/.cursor*' ':(exclude,glob)**/.cursor*/**' |
+  tar -x -C "$out"
 
 # Same pinned image as `make gitleaks`; the exported .gitleaks.toml allowlists the API examples.
 image=$(sed -n 's/^GITLEAKS_IMAGE := //p' "$repo/Makefile")
@@ -47,9 +49,19 @@ fi
 
 git -C "$out" init -q -b main
 git -C "$out" add -A
+# The environment beats user config, and no template or hook may add a trailer or another identity.
 # UTC, so the commit does not carry the local time zone.
-TZ=UTC git -C "$out" -c user.name="$name" -c user.email="$email" -c commit.gpgsign=false \
-  commit -q -m "chore: initial public release"
+message="chore: initial public release"
+GIT_AUTHOR_NAME=$name GIT_AUTHOR_EMAIL=$email GIT_COMMITTER_NAME=$name GIT_COMMITTER_EMAIL=$email TZ=UTC \
+  git -C "$out" -c commit.template= -c core.hooksPath=/dev/null -c commit.gpgsign=false \
+  commit -q --no-verify -m "$message"
+
+meta=$(git -C "$out" log --format='%an %ae%n%cn %ce%n%B')
+expected=$(printf '%s %s\n%s %s\n%s' "$name" "$email" "$name" "$email" "$message")
+if [[ $meta != "$expected" ]] || grep -qiE 'co-authored-by|cursor' <<<"$meta"; then
+  printf 'unexpected identity or message in %s, do not push:\n%s\n' "$out" "$meta" >&2
+  exit 1
+fi
 
 cat <<EOF
 Exported $ref (${commit:0:7}) to $out as $(git -C "$out" rev-parse --short HEAD) by $name <$email>.
