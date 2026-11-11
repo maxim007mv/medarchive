@@ -11,8 +11,11 @@ export function useCountdown(seconds: number | null, source: unknown): number | 
   useEffect(() => {
     setLeft(seconds);
     if (seconds === null) return;
+    let remaining = seconds;
     const timer = setInterval(() => {
-      setLeft((previous) => (previous !== null && previous > 1 ? previous - 1 : null));
+      remaining -= 1;
+      setLeft(remaining > 0 ? remaining : null);
+      if (remaining <= 0) clearInterval(timer);
     }, 1000);
     return () => clearInterval(timer);
   }, [seconds, source]);
