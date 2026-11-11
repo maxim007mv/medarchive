@@ -3,7 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 
 import { Alert } from "@/components/ui/alert";
 import { useDelayedFlag } from "@/components/ui/skeleton";
@@ -119,14 +119,18 @@ export function ArchiveScreen({
     }
   }
 
-  function toggle(id: string, checked: boolean) {
+  const toggle = useCallback((id: string, checked: boolean) => {
     setSelected((current) => {
       const next = new Set(current);
       if (checked) next.add(id);
       else next.delete(id);
       return next;
     });
-  }
+  }, []);
+  const askToDelete = useCallback(
+    (item: DocumentItem, opener: HTMLElement | null) => setDeleteTarget({ item, opener }),
+    [],
+  );
 
   function drop(event: DragEvent) {
     event.preventDefault();
@@ -140,7 +144,7 @@ export function ArchiveScreen({
     timeZone,
     selected,
     onToggle: toggle,
-    onDelete: (item: DocumentItem, opener: HTMLElement | null) => setDeleteTarget({ item, opener }),
+    onDelete: askToDelete,
     highlightId,
     deleteDisabledReason: offlineReason,
   };

@@ -3,7 +3,7 @@
 import { ChevronDown, Eye, FileText, StickyNote } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { MouseEvent } from "react";
+import { memo, type MouseEvent } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
@@ -19,6 +19,7 @@ export type ListProps = {
   items: DocumentItem[];
   timeZone: string;
   selected: ReadonlySet<string>;
+  /** Callbacks keep their identity between renders: rows are memoized, up to 200 of them. */
   onToggle: (id: string, checked: boolean) => void;
   /** `opener` is the menu trigger, focused again when the dialog is dismissed. */
   onDelete: (item: DocumentItem, opener: HTMLElement | null) => void;
@@ -92,7 +93,6 @@ export function DocumentTable({
   orderBy,
   onOrderChange,
 }: ListProps & { orderBy: OrderBy; onOrderChange: (order: OrderBy) => void }) {
-  const router = useRouter();
   const allSelected = items.length > 0 && items.every((item) => selected.has(item.id));
   const someSelected = !allSelected && items.some((item) => selected.has(item.id));
 
@@ -135,70 +135,99 @@ export function DocumentTable({
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr
+            <DocumentRow
               key={item.id}
-              data-testid="document-row"
-              onClick={(event) => !isInsideControl(event) && router.push(documentHref(item.id))}
-              className={cn(
-                "border-border hover:bg-sunken cursor-pointer border-b last:border-b-0",
-                item.id === highlightId && "motion-safe:animate-highlight",
-              )}
-            >
-              <td className="py-3 pl-4">
-                <Checkbox
-                  aria-label={t("list.row.select", { title: item.title })}
-                  checked={selected.has(item.id)}
-                  onCheckedChange={(checked) => onToggle(item.id, checked === true)}
-                />
-              </td>
-              <td className="px-3 py-3">
-                <div className="flex items-center gap-3">
-                  <span
-                    className="size-icon-button-sm bg-sunken text-text2 grid shrink-0 place-items-center rounded-md"
-                    aria-hidden
-                  >
-                    <FileText size={16} strokeWidth={1.75} />
-                  </span>
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <Link
-                      href={documentHref(item.id)}
-                      className="text-body truncate rounded-xs font-medium"
-                    >
-                      {item.title}
-                    </Link>
-                    <FileMeta item={item} />
-                  </div>
-                </div>
-              </td>
-              <td className="px-3 py-3">
-                <TypeTag type={item.type} />
-              </td>
-              <td className="text-mono px-3 py-3 font-mono">
-                {item.document_date ? formatDate(item.document_date) : <UndatedTag />}
-              </td>
-              <td className="text-mono text-text3 px-3 py-3 font-mono">
-                {formatDateTime(item.uploaded_at, timeZone)}
-              </td>
-              <td className="py-3 pr-3">
-                <div className="flex justify-end gap-1">
-                  <Link
-                    href={documentHref(item.id)}
-                    tabIndex={-1}
-                    aria-label={texts["list.row.open"]}
-                    className="size-icon-button-sm text-text2 hover:bg-border hover:text-text grid place-items-center rounded-md"
-                  >
-                    <Eye size={16} strokeWidth={1.75} aria-hidden />
-                  </Link>
-                  <RowMenu
-                    onDelete={(opener) => onDelete(item, opener)}
-                    disabledReason={deleteDisabledReason}
-                  />
-                </div>
-              </td>
-            </tr>
+              item={item}
+              timeZone={timeZone}
+              checked={selected.has(item.id)}
+              highlighted={item.id === highlightId}
+              onToggle={onToggle}
+              onDelete={onDelete}
+              deleteDisabledReason={deleteDisabledReason}
+            />
           ))}
         </tbody>
       </table>
     </div>
   );
 }
+
+export type RowProps = Pick<ListProps, "timeZone" | "onDelete" | "deleteDisabledReason"> & {
+  item: DocumentItem;
+  highlighted: boolean;
+};
+
+const DocumentRow = memo(function DocumentRow({
+  item,
+  timeZone,
+  checked,
+  highlighted,
+  onToggle,
+  onDelete,
+  deleteDisabledReason,
+}: RowProps & { checked: boolean; onToggle: ListProps["onToggle"] }) {
+  const router = useRouter();
+
+  return (
+    <tr
+      data-testid="document-row"
+      onClick={(event) => !isInsideControl(event) && router.push(documentHref(item.id))}
+      className={cn(
+        "border-border hover:bg-sunken cursor-pointer border-b last:border-b-0",
+        highlighted && "motion-safe:animate-highlight",
+      )}
+    >
+      <td className="py-3 pl-4">
+        <Checkbox
+          aria-label={t("list.row.select", { title: item.title })}
+          checked={checked}
+          onCheckedChange={(next) => onToggle(item.id, next === true)}
+        />
+      </td>
+      <td className="px-3 py-3">
+        <div className="flex items-center gap-3">
+          <span
+            className="size-icon-button-sm bg-sunken text-text2 grid shrink-0 place-items-center rounded-md"
+            aria-hidden
+          >
+            <FileText size={16} strokeWidth={1.75} />
+          </span>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <Link
+              href={documentHref(item.id)}
+              className="text-body truncate rounded-xs font-medium"
+            >
+              {item.title}
+            </Link>
+            <FileMeta item={item} />
+          </div>
+        </div>
+      </td>
+      <td className="px-3 py-3">
+        <TypeTag type={item.type} />
+      </td>
+      <td className="text-mono px-3 py-3 font-mono">
+        {item.document_date ? formatDate(item.document_date) : <UndatedTag />}
+      </td>
+      <td className="text-mono text-text3 px-3 py-3 font-mono">
+        {formatDateTime(item.uploaded_at, timeZone)}
+      </td>
+      <td className="py-3 pr-3">
+        <div className="flex justify-end gap-1">
+          <Link
+            href={documentHref(item.id)}
+            tabIndex={-1}
+            aria-label={texts["list.row.open"]}
+            className="size-icon-button-sm text-text2 hover:bg-border hover:text-text grid place-items-center rounded-md"
+          >
+            <Eye size={16} strokeWidth={1.75} aria-hidden />
+          </Link>
+          <RowMenu
+            onDelete={(opener) => onDelete(item, opener)}
+            disabledReason={deleteDisabledReason}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+});
