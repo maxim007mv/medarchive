@@ -1,6 +1,6 @@
 .PHONY: setup secrets up down lint typecheck test test-api test-web e2e ci images gen-api fixtures seed \
 	contract a11y visual visual-baseline security audit-python audit-node gitleaks trivy zap load \
-	alerts verify-block
+	alerts verify-block node-runtime
 
 API := uv run --directory apps/api
 export NEXT_TELEMETRY_DISABLED := 1
@@ -21,7 +21,9 @@ ZAP_IMAGE := ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf7
 K6_IMAGE := grafana/k6:2.3.0
 PROMETHEUS_IMAGE := prom/prometheus:v3.16.0
 PIP_AUDIT := pip-audit==2.10.0
-BASE_IMAGES := python:3.12-slim-bookworm node:22-alpine
+# Cleaned Node runtime (npm stripped) is what we ship and what Trivy must pass (D-004 / OPS-05).
+NODE_RUNTIME_IMAGE := medarchive/node-runtime:22-alpine
+BASE_IMAGES := python:3.12-slim-bookworm $(NODE_RUNTIME_IMAGE)
 
 setup:
 	corepack enable pnpm
@@ -99,9 +101,13 @@ visual-baseline:
 	pnpm --filter e2e exec playwright test tests/visual --update-snapshots=all
 
 # OPS-04, OPS-05: dependency audits, secrets in git history, image vulnerabilities.
-security: audit-python audit-node gitleaks
+security: audit-python audit-node gitleaks node-runtime
 	for image in medarchive/api:$(IMAGE_TAG) medarchive/web:$(IMAGE_TAG) $(BASE_IMAGES); do \
 		$(MAKE) --no-print-directory trivy IMAGE=$$image || exit 1; done
+
+# Stripped Node base for Trivy and as the pin reference for apps/web/Dockerfile.
+node-runtime:
+	docker build -f infra/docker/node-runtime.Dockerfile -t $(NODE_RUNTIME_IMAGE) .
 
 audit-python:
 	mkdir -p $(REPORT_DIR)
