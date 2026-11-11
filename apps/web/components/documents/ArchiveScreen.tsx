@@ -49,13 +49,21 @@ type Props = {
   session: Session;
   /** Files chosen on onboarding, before the archive existed. */
   initialFiles: File[];
+  /** Their dialog has closed: the owner lets the files go. */
+  onInitialFilesDone: () => void;
   /** Key of an archive created just now; shown once, after the first upload dialog closes. */
   issuedKey: string | null;
   onKeyShown: () => void;
 };
 
 /** D06..D08, D13, D14, M02..M05: the archive list with search, filters and dialogs. */
-export function ArchiveScreen({ session, initialFiles, issuedKey, onKeyShown }: Props) {
+export function ArchiveScreen({
+  session,
+  initialFiles,
+  onInitialFilesDone,
+  issuedKey,
+  onKeyShown,
+}: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const showToast = useToast();
@@ -104,6 +112,7 @@ export function ArchiveScreen({ session, initialFiles, issuedKey, onKeyShown }: 
 
   function closeUpload() {
     setUploadFiles(null);
+    if (initialFiles.length > 0) onInitialFilesDone();
     if (issuedKey) {
       setKeyToShow(issuedKey);
       onKeyShown();

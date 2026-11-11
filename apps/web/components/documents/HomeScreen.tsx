@@ -42,6 +42,7 @@ export function HomeScreen() {
       <ArchiveScreen
         session={session.data}
         initialFiles={pendingFiles}
+        onInitialFilesDone={() => setPendingFiles([])}
         issuedKey={issuedKey}
         onKeyShown={() => setIssuedKey(null)}
       />

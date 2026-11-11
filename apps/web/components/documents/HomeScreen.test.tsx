@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -82,6 +82,57 @@ describe("onboarding (FE-11)", () => {
     expect(
       api.calls.find((call) => call.url.endsWith("/api/v1/uploads"))?.headers.get("X-CSRF-Token"),
     ).toBe("csrf-new");
+  });
+
+  test("once the first dialog closes the onboarding files are let go: the archive shown again does not upload them", async () => {
+    FakeXhr.install();
+    let sessionReply = (): Response | Promise<Response> =>
+      problem(401, "unauthenticated", "Сессия закончилась");
+    const api = mockApi({
+      "GET /api/v1/session": () => sessionReply(),
+      "POST /api/v1/workspaces": () =>
+        json(201, {
+          workspace: { id: "w1", created_at: "2026-11-10T09:00:00Z", document_count: 0 },
+          access_key: "7K3M-Q9TB-2XRA-HC4D-P8WN-6YFE",
+          csrf_token: "csrf-new",
+          scopes: ["documents:read", "documents:write", "exports:create", "workspace:manage"],
+        }),
+      "GET /api/v1/documents": () =>
+        json(200, { items: [], total: 0, matched: 0, undated_excluded: 0, next_page_token: "" }),
+      "POST /api/v1/uploads": () =>
+        json(201, {
+          upload_id: "u1",
+          url: "http://localhost:9000/q",
+          fields: {},
+          max_bytes: 1,
+          expires_at: "2026-11-10T09:15:00Z",
+        }),
+    });
+    const client = makeQueryClient();
+    render(
+      <Wrapper client={client}>
+        <HomeScreen />
+      </Wrapper>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("checkbox"));
+    await user.upload(screen.getByTestId("onboarding-file-input"), pdfFile());
+    await screen.findByRole("dialog", { name: "Новый документ" });
+    await user.click(screen.getByRole("button", { name: "Отмена" }));
+    await user.click(await screen.findByRole("button", { name: "Готово" }));
+
+    sessionReply = () => Promise.reject(new TypeError("Failed to fetch"));
+    await act(() => client.refetchQueries({ queryKey: ["session"] }));
+    expect(
+      await screen.findByRole("heading", { name: "Не удаётся открыть архив" }),
+    ).toBeInTheDocument();
+    sessionReply = () =>
+      json(200, { workspace_id: "w1", csrf_token: "csrf-new", scopes: [], timezone: "UTC" });
+    await act(() => client.refetchQueries({ queryKey: ["session"] }));
+
+    expect(await screen.findByText("Все медицинские документы в одном месте")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Новый документ" })).not.toBeInTheDocument();
+    expect(api.calls.filter((call) => call.url.endsWith("/api/v1/uploads"))).toHaveLength(1);
   });
 
   test("TC-015: a non-PDF first file is refused and no archive is created", async () => {
