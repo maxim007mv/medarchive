@@ -2,7 +2,7 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 
 import { texts } from "@/lib/texts";
 
@@ -58,14 +58,16 @@ export function Dialog({
   // Radix returns focus only to a Dialog.Trigger; our dialogs open from any button or menu.
   const returnFocusTo = useRef<Element | null>(null);
 
-  // React runs this cleanup before the effects of a dialog mounted in the same commit, so its
-  // onOpenAutoFocus already sees the target.
-  useEffect(() => {
+  // Capture the opener before Radix moves focus (onOpenAutoFocus already sees the dialog).
+  // Cleanup runs before the next dialog's layout effect in the same commit, so a hand-off
+  // inherits this return target instead of finalFocus.
+  useLayoutEffect(() => {
     if (!open) return;
+    returnFocusTo.current = handOff ? closedDialogReturnTo : document.activeElement;
     return () => {
       closedDialogReturnTo = returnFocusTo.current;
     };
-  }, [open]);
+  }, [open, handOff]);
 
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
@@ -80,7 +82,6 @@ export function Dialog({
             // Without a description Radix would point aria-describedby at a missing element.
             {...(description ? {} : { "aria-describedby": undefined })}
             onOpenAutoFocus={(event) => {
-              returnFocusTo.current = handOff ? closedDialogReturnTo : document.activeElement;
               if (!initialFocus?.current) return;
               event.preventDefault();
               initialFocus.current.focus();
@@ -113,9 +114,8 @@ export function Dialog({
               )}
             </div>
             {children && (
-              // pb-1 keeps the focus ring (2 px + 2 px offset) of the last control inside the
-              // scroll box, which clips it; -mb-1 gives the space back to what follows.
-              <div className="-mb-1 flex min-h-0 flex-col gap-4 overflow-y-auto px-4 pt-5 pb-1 md:px-6">
+              // Focus ring is 2 px + 2 px offset: keep it inside the scroll box on every side.
+              <div className="-mb-2 flex min-h-0 flex-col gap-4 overflow-y-auto px-5 pt-5 pb-2 md:px-7">
                 {children}
               </div>
             )}
