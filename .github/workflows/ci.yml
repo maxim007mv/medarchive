@@ -58,7 +58,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10
       - run: make images IMAGE_TAG=ci
       - run: make security IMAGE_TAG=ci REPORT_DIR=reports
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: security-reports
@@ -103,7 +103,7 @@ jobs:
           make load REPORT_DIR=reports
       - run: docker compose logs --no-color > reports/stack.log
         if: failure()
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: stack-reports
