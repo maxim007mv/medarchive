@@ -9,4 +9,8 @@ if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
   source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
   nvm use --silent
 fi
+# A Mac that sleeps mid-run stalls the stack and blows every test timeout; keep it awake.
+if command -v caffeinate >/dev/null; then
+  exec caffeinate -ims uv run --quiet --python 3.12 tools/verify_block.py "$@"
+fi
 exec uv run --quiet --python 3.12 tools/verify_block.py "$@"

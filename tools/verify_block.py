@@ -76,6 +76,21 @@ OUT_OF_SCOPE = range(100, 105)
 TC_PATTERN = re.compile(r"(?<![a-z])TC[-_ ]?(\d{3}b?)(?!\d)", re.IGNORECASE)
 
 Summary = Callable[[subprocess.CompletedProcess[str]], tuple[bool, str]]
+# On macOS the monotonic clock stops while the host sleeps and the wall clock does not.
+ASLEEP_THRESHOLD_S = 30
+
+
+@dataclass(frozen=True)
+class Started:
+    monotonic: float
+    wall: float
+
+    @staticmethod
+    def now() -> "Started":
+        return Started(time.monotonic(), time.time())
+
+    def asleep_s(self) -> float:
+        return (time.time() - self.wall) - (time.monotonic() - self.monotonic)
 
 
 @dataclass
@@ -117,7 +132,7 @@ class Gate:
         """Runs one check with its output in a log file and records pass or fail with a summary."""
         slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         log = self.logs / f"{len(self.steps) + 1:02d}-{slug}.log"
-        started = time.monotonic()
+        started = Started.now()
         try:
             done = subprocess.run(
                 command,
@@ -136,10 +151,14 @@ class Gate:
         self.record(name, blocking, ok, f"{detail}; лог `{log.name}`", started)
         return ok
 
-    def record(self, name: str, blocking: bool, ok: bool, detail: str, started: float) -> None:
+    def record(self, name: str, blocking: bool, ok: bool, detail: str, started: Started) -> None:
         status = "pass" if ok else "fail"
+        asleep = started.asleep_s()
+        if asleep > ASLEEP_THRESHOLD_S:
+            detail = f"host asleep {asleep:.0f} s during the step; {detail}"
         detail = " ".join(detail.split())[:400]  # one table row
-        self.steps.append(Step(name, blocking, status, detail, time.monotonic() - started))
+        seconds = time.monotonic() - started.monotonic
+        self.steps.append(Step(name, blocking, status, detail, seconds))
         print(f"[{status}] {name}: {detail}", flush=True)
 
     def skip(self, name: str, reason: str) -> None:
@@ -482,7 +501,7 @@ def pii_markers() -> list[str]:
 
 def run_pii_scan(gate: Gate) -> None:
     """TC-096 and T8 after the E2E run: logs of all services and a data-only dump of schema app."""
-    started = time.monotonic()
+    started = Started.now()
     logs = compose("logs", "--no-color").stdout
     dump = compose(
         "exec",
