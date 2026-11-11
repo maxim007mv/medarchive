@@ -20,5 +20,6 @@ HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
   CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
 # Python is CPU-bound per request (~8 ms list, ~17 ms search at 1000 docs): several processes on
 # SO_REUSEPORT sockets keep k6 p95 < 300 ms at 50 VU (DoD 4). Each has its own DB pool (DB-12).
-ENV WEB_CONCURRENCY=4
+# Two malloc arenas: thread pools otherwise grow each process's RSS by an arena per thread.
+ENV WEB_CONCURRENCY=4 MALLOC_ARENA_MAX=2
 CMD ["python", "-m", "app.serve"]

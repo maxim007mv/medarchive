@@ -90,7 +90,8 @@ services:
 
   api:
     <<: [*api-image, *hardening]
-    mem_limit: 1g
+    # Four uvicorn processes (app.serve, k6 p95) at up to ~300 MiB each under E2E uploads.
+    mem_limit: 1536m
     environment:
       DATABASE_URL: postgresql+asyncpg://ma_app:${MA_APP_PASSWORD}@db:5432/medarchive
       REDIS_URL: redis://redis:6379/0

@@ -5,6 +5,7 @@ a ciphertext copied into another row does not decrypt. Plaintext never reaches l
 """
 
 import asyncio
+import os
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
@@ -38,8 +39,9 @@ from app.storage.s3 import ObjectStorage, StorageUnavailableError
 
 # A check holds the plaintext and the ciphertext in /tmp (tmpfs, so container memory) and a broken
 # PDF keeps pypdf busy for seconds under the GIL. Its own pool bounds both and leaves the default
-# executor to the storage calls of downloads.
-MAX_CONCURRENT_FILE_CHECKS = 4
+# executor to the storage calls of downloads. Four per container: app.serve runs WEB_CONCURRENCY
+# processes, so each gets its share (four per process got workers OOM-killed under E2E).
+MAX_CONCURRENT_FILE_CHECKS = max(1, 4 // int(os.environ.get("WEB_CONCURRENCY", "1")))
 _file_checks = ThreadPoolExecutor(MAX_CONCURRENT_FILE_CHECKS, thread_name_prefix="file-check")
 
 

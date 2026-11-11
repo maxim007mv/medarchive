@@ -4,6 +4,7 @@
 in the first process that wakes: 50 keep-alive clients pile onto one or two workers while the rest
 idle (k6 p95 of GET /documents, TZ-backend DoD 4). With SO_REUSEPORT the kernel spreads new
 connections across the processes. Workers: `WEB_CONCURRENCY` (uvicorn's variable), default 4.
+A worker that dies (for example OOM-killed) is replaced, as uvicorn's own supervisor does.
 """
 
 import multiprocessing
@@ -12,6 +13,7 @@ import signal
 import socket
 import sys
 from multiprocessing.connection import wait
+from multiprocessing.context import SpawnProcess
 from types import FrameType
 
 import uvicorn
@@ -38,33 +40,33 @@ def _serve() -> None:
 def main() -> int:
     workers = int(os.environ.get("WEB_CONCURRENCY", DEFAULT_WORKERS))
     context = multiprocessing.get_context("spawn")
-    processes = [context.Process(target=_serve, name=f"api-{n}") for n in range(workers)]
-    for process in processes:
+    stopping = False
+
+    def start(n: int) -> SpawnProcess:
+        process = context.Process(target=_serve, name=f"api-{n}")
         process.start()
+        return process
 
-    requested = False
+    processes = [start(n) for n in range(workers)]
 
-    def stop(signum: int, _frame: FrameType | None) -> None:
+    def on_signal(signum: int, _frame: FrameType | None) -> None:
+        nonlocal stopping
+        stopping = True
         for process in processes:
             if process.is_alive() and process.pid is not None:
                 os.kill(process.pid, signum)
 
-    def on_signal(signum: int, frame: FrameType | None) -> None:
-        nonlocal requested
-        requested = True
-        stop(signum, frame)
-
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
-    # The first process to exit ends the container: a dead worker must not leave a half API.
-    wait([process.sentinel for process in processes])
-    stop(signal.SIGTERM, None)
+    while not stopping:
+        wait([process.sentinel for process in processes])
+        for n, process in enumerate(processes):
+            if not stopping and not process.is_alive():
+                print(f"api worker {process.pid} exited with {process.exitcode}; restarting")
+                processes[n] = start(n)
     for process in processes:
         process.join()
-    # uvicorn re-raises the stop signal after a graceful shutdown (exit code -15).
-    if requested:
-        return 0
-    return 1 if any(process.exitcode for process in processes) else 0
+    return 0
 
 
 if __name__ == "__main__":
