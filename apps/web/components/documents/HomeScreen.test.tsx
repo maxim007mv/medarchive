@@ -135,6 +135,44 @@ describe("onboarding (FE-11)", () => {
     expect(api.calls.filter((call) => call.url.endsWith("/api/v1/uploads"))).toHaveLength(1);
   });
 
+  test("TC-004: the first form hands over to the key dialog under one still scrim, focus inside it", async () => {
+    FakeXhr.install();
+    mockApi({
+      "GET /api/v1/session": () => problem(401, "unauthenticated", "Сессия закончилась"),
+      "POST /api/v1/workspaces": () =>
+        json(201, {
+          workspace: { id: "w1", created_at: "2026-11-10T09:00:00Z", document_count: 0 },
+          access_key: "7K3M-Q9TB-2XRA-HC4D-P8WN-6YFE",
+          csrf_token: "csrf-new",
+          scopes: ["documents:read", "documents:write", "exports:create", "workspace:manage"],
+        }),
+      "GET /api/v1/documents": () =>
+        json(200, { items: [], total: 0, matched: 0, undated_excluded: 0, next_page_token: "" }),
+      "POST /api/v1/uploads": () =>
+        json(201, {
+          upload_id: "u1",
+          url: "http://localhost:9000/q",
+          fields: {},
+          max_bytes: 1,
+          expires_at: "2026-11-10T09:15:00Z",
+        }),
+    });
+    const user = renderHome();
+    await user.click(await screen.findByRole("checkbox"));
+    await user.upload(screen.getByTestId("onboarding-file-input"), pdfFile());
+    await screen.findByRole("dialog", { name: "Новый документ" });
+
+    await user.click(screen.getByRole("button", { name: "Отмена" }));
+    // The closing form hands focus back a task later; the key dialog must keep it.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    const dialogs = screen.getAllByRole("dialog");
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]).toHaveAccessibleName("Ключ доступа к архиву");
+    expect(dialogs[0]?.parentElement?.className).not.toContain("animate-fade-in");
+    expect(screen.getByRole("button", { name: "Скопировать" })).toHaveFocus();
+  });
+
   test("TC-015: a non-PDF first file is refused and no archive is created", async () => {
     const api = mockApi({
       "GET /api/v1/session": () => problem(401, "unauthenticated", "Сессия закончилась"),

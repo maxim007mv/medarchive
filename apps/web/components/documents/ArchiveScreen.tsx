@@ -3,7 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 
 import { Alert } from "@/components/ui/alert";
 import { useDelayedFlag } from "@/components/ui/skeleton";
@@ -19,6 +19,9 @@ import {
 import { hasAppliedFilters, serializeFilters } from "@/lib/filters";
 import { t, texts } from "@/lib/texts";
 
+// Not lazy: it replaces the upload dialog in the same frame, a chunk still loading would leave
+// the list without a scrim in between.
+import { AccessKeyDialog } from "./AccessKeyDialog";
 import { AppHeader } from "./AppHeader";
 import { AppliedFilters } from "./AppliedFilters";
 import type { DeleteTarget } from "./DeleteDialog";
@@ -37,12 +40,11 @@ import { useListFilters } from "./use-list-filters";
 const UploadDialog = dynamic(() => import("./UploadDialog").then((module) => module.UploadDialog));
 const ExportDialog = dynamic(() => import("./ExportDialog").then((module) => module.ExportDialog));
 const DeleteDialog = dynamic(() => import("./DeleteDialog").then((module) => module.DeleteDialog));
-const AccessKeyDialog = dynamic(() =>
-  import("./AccessKeyDialog").then((module) => module.AccessKeyDialog),
-);
 
 /** `--dur-highlight` of tokens.json: how long a new row stays lit. */
 const HIGHLIGHT_MS = 1200;
+
+type SavedDocument = Pick<DocumentItem, "id" | "title">;
 type Props = {
   session: Session;
   /** Files chosen on onboarding, before the archive existed. */
@@ -82,6 +84,11 @@ export function ArchiveScreen({
   } | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  // Saved before the new archive's key is shown: the toast would cover the key dialog (and lead
+  // away from it) and the row would light up unseen behind it, so both wait for «Готово».
+  const [savedBeforeKey, setSavedBeforeKey] = useState<SavedDocument | null>(null);
+  // The onboarding opener is gone by the time the key dialog closes; focus lands on the list.
+  const headingRef = useRef<HTMLHeadingElement>(null);
   // Stable between renders: ExportDialog asks the server for a new composition when it changes.
   const selectedIds = useMemo(() => [...selected], [selected]);
 
@@ -107,6 +114,17 @@ export function ArchiveScreen({
   const filtered = hasAppliedFilters(filters);
   const archiveEmpty = documents.isSuccess && total === 0;
   const addFiles = (files: File[]) => files.length > 0 && setUploadFiles(files);
+
+  function announceSaved(saved: SavedDocument) {
+    setHighlightId(saved.id);
+    showToast({
+      title: t("upload.toast.added", { title: saved.title }),
+      action: {
+        label: texts["upload.toast.open"],
+        onClick: () => router.push(documentHref(saved.id)),
+      },
+    });
+  }
 
   function closeUpload() {
     setUploadFiles(null);
@@ -174,7 +192,9 @@ export function ArchiveScreen({
           className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 pt-6 pb-8 lg:px-6 lg:pt-8"
         >
           <div className="flex flex-col gap-1">
-            <h1 className="text-h1">{texts["list.title"]}</h1>
+            <h1 ref={headingRef} tabIndex={-1} className="text-h1">
+              {texts["list.title"]}
+            </h1>
             {first && (
               <p className="text-caption text-text2">{listSubtitle(filters, first, filtered)}</p>
             )}
@@ -230,18 +250,22 @@ export function ArchiveScreen({
           onClose={closeUpload}
           onSaved={(saved) => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.allDocuments });
-            setHighlightId(saved.document.id);
-            showToast({
-              title: t("upload.toast.added", { title: saved.document.title }),
-              action: {
-                label: texts["upload.toast.open"],
-                onClick: () => router.push(documentHref(saved.document.id)),
-              },
-            });
+            if (issuedKey) setSavedBeforeKey(saved.document);
+            else announceSaved(saved.document);
           }}
         />
       )}
-      {keyToShow && <AccessKeyDialog accessKey={keyToShow} onClose={() => setKeyToShow(null)} />}
+      {keyToShow && (
+        <AccessKeyDialog
+          accessKey={keyToShow}
+          finalFocus={headingRef}
+          onClose={() => {
+            setKeyToShow(null);
+            if (savedBeforeKey) announceSaved(savedBeforeKey);
+            setSavedBeforeKey(null);
+          }}
+        />
+      )}
       {exportOpen && (
         <ExportDialog
           filters={filters}

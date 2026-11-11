@@ -1,6 +1,7 @@
 "use client";
 
 import { Copy, Download } from "lucide-react";
+import type { RefObject } from "react";
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -24,13 +25,17 @@ function downloadKey(accessKey: string): void {
 
 /**
  * The access key right after it was issued (TC-004, FE-22). The server keeps only its hash,
- * so this is the one time it can be shown.
+ * so this is the one time it can be shown. It always takes over from the dialog that led to it:
+ * the first upload form or the new key confirmation.
  */
 export function AccessKeyDialog({
   accessKey,
+  finalFocus,
   onClose,
 }: {
   accessKey: string;
+  /** Where focus goes after «Готово» if the opener of the previous dialog is gone. */
+  finalFocus?: RefObject<HTMLElement | null>;
   onClose: () => void;
 }) {
   const showToast = useToast();
@@ -47,6 +52,8 @@ export function AccessKeyDialog({
   return (
     <Dialog
       open
+      handOff
+      finalFocus={finalFocus}
       onOpenChange={(open) => !open && onClose()}
       title={texts["accessKey.title"]}
       description={texts["accessKey.text"]}
