@@ -42,7 +42,7 @@ Web: next 15.5.29, react/react-dom 19.3.1, typescript 5.9.3, tailwindcss и @tai
 1. Официальные образы `minio/minio` и `minio/mc` больше не публикуются (Docker Hub: «repository does not exist», quay.io: unauthorized). Взят поддерживаемый форк `pgsty/minio` и `pgsty/mc` с закреплёнными тегами.
 2. MinIO не поддерживает CORS на уровне бакета (`mc cors set` отвечает «A header you provided implies functionality that is not implemented»). Origin `http://localhost:${WEB_PORT}` разрешён глобально через `MINIO_API_CORS_ALLOW_ORIGIN`. Браузер обращается только к `ma-quarantine` (presigned POST); `ma-docs` без подписи отвечает 403.
 3. Порт Postgres на хост не публикуется: 5432 занят другим проектом пользователя. Доступ: `docker compose exec db psql -U postgres -d medarchive`.
-4. Порты хоста web и api настраиваются `WEB_PORT` и `API_PORT` (по умолчанию 3000 и 8000). На этой машине 3000 и 8000 заняты чужими контейнерами (`startup-jobs-frontend`, `mapgo-api-1`), поэтому проверка шла на 3300 и 8800.
+4. Порты хоста web и api настраиваются `WEB_PORT` и `API_PORT` (по умолчанию 3000 и 8000). На этой машине 3000 и 8000 заняты контейнерами других проектов, поэтому проверка шла на 3300 и 8800.
 5. `.gitignore`: правило `secrets/` заменено на `/secrets/`, иначе git и ruff не видели `infra/secrets/generate.py`.
 
 ## Проверка (команды и результат)
