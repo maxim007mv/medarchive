@@ -87,7 +87,21 @@ def test_download_to_file(storage: ObjectStorage) -> None:
 
     storage.quarantine.download("q/ws/d.bin", destination)
 
+    assert destination.tell() == len(b"%PDF-data")
     assert destination.getvalue() == b"%PDF-data"
+
+
+def test_download_of_20_mib_file_leaves_cursor_at_the_end(storage: ObjectStorage) -> None:
+    """size_bytes of a new document is destination.tell() after this download (BE-06)."""
+    payload = bytes(20 * 1024 * 1024)
+    storage.quarantine.upload("q/ws/big.bin", io.BytesIO(payload))
+    destination = io.BytesIO()
+
+    storage.quarantine.download("q/ws/big.bin", destination)
+
+    assert destination.tell() == len(payload)
+    destination.seek(0)
+    assert destination.read() == payload
 
 
 def test_unreachable_storage_is_unavailable() -> None:

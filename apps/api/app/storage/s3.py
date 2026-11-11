@@ -3,6 +3,7 @@
 boto3 is synchronous; callers run these methods in a worker thread.
 """
 
+import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -70,8 +71,17 @@ class Bucket:
         return head["ContentLength"]
 
     def download(self, key: str, destination: IO[bytes]) -> None:
+        """Copy the object into `destination` and leave the cursor after the last byte.
+
+        download_fileobj writes with several threads and leaves the cursor on an 8 MiB boundary,
+        so `destination.tell()` is not the size of the object.
+        """
         with _unavailable_on_error():
-            self._client.download_fileobj(self.name, key, destination)
+            body = self._client.get_object(Bucket=self.name, Key=key)["Body"]
+            try:
+                shutil.copyfileobj(body, destination, 64 * 1024)
+            finally:
+                body.close()
 
     def upload(self, key: str, source: IO[bytes]) -> None:
         """One PUT streamed from `source` (objects are at most 20 MiB plus Tink overhead).

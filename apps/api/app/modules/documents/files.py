@@ -47,7 +47,8 @@ def store_verified_pdf(
         plain_path, cipher_path = Path(workdir, "plain"), Path(workdir, "cipher")
         with plain_path.open("w+b") as plain:
             storage.quarantine.download(quarantine_key, plain)
-            size_bytes = plain.tell()
+            # seek to the end: a multipart download can leave the cursor mid-file (BE-06).
+            size_bytes = plain.seek(0, 2)
             if size_bytes > MAX_UPLOAD_BYTES:
                 raise ProblemError(ErrorCode.FILE_TOO_LARGE)
             page_count = inspect_pdf(plain)
