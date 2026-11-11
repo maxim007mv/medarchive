@@ -1,0 +1,101 @@
+{
+  "upload_limit_bytes": 20971520,
+  "sources": [
+    {
+      "path": "MedArchive/05_qa/fixtures/01-general-blood-test.pdf",
+      "sha256": "7ad726f5a3663e693c376562e03a2e9cc13c800112e92c09ff4f3f959560cc93",
+      "size_bytes": 79114,
+      "title": "Общий анализ крови",
+      "type": "analysis",
+      "document_date": "2026-04-08",
+      "expected_order": 3
+    },
+    {
+      "path": "MedArchive/05_qa/fixtures/02-blood-biochemistry.pdf",
+      "sha256": "9aebf453cc5ca2f22a6fe7955494f3a87951bb39a3cff6d5ec40c8b1855e9ffc",
+      "size_bytes": 78110,
+      "title": "Биохимический анализ крови",
+      "type": "analysis",
+      "document_date": "2026-04-08",
+      "expected_order": 4
+    },
+    {
+      "path": "MedArchive/05_qa/fixtures/03-lipid-profile.pdf",
+      "sha256": "5ef25907d3d0725dbc37fd4d75db88d86899d26cba43f94c90982f19f7cd48c6",
+      "size_bytes": 76520,
+      "title": "Липидограмма",
+      "type": "analysis",
+      "document_date": "2026-05-21",
+      "expected_order": 1
+    },
+    {
+      "path": "MedArchive/05_qa/fixtures/04-therapist-summary.pdf",
+      "sha256": "182b13db6af832b4617b45b57b46e33313dda17a66781c75eec46346ce0d3581",
+      "size_bytes": 78083,
+      "title": "Заключение терапевта",
+      "type": "conclusion",
+      "document_date": "2026-04-10",
+      "expected_order": 2
+    },
+    {
+      "path": "MedArchive/05_qa/fixtures/05-ultrasound-summary.pdf",
+      "sha256": "351e1b4b4c232200b3aee80553ee12a4490f257b3fbe8644f6feda273f06a98a",
+      "size_bytes": 78128,
+      "title": "УЗИ почек и мочевого пузыря",
+      "type": "conclusion",
+      "document_date": "2026-05-22",
+      "expected_order": 0
+    },
+    {
+      "path": "MedArchive/05_qa/fixtures/06-ecg-summary-undated.pdf",
+      "sha256": "b136a7f64ccb6ea1be82e02f9a5ade08db5fe479be05936ed0a30a65c8578c40",
+      "size_bytes": 77736,
+      "title": "ЭКГ покоя",
+      "type": "conclusion",
+      "document_date": null,
+      "expected_order": 5
+    }
+  ],
+  "generated": [
+    {
+      "name": "big-21mb.pdf",
+      "purpose": "Valid 1-page PDF of 22020097 bytes, above the upload limit",
+      "expected_result": "file_too_large",
+      "test_cases": ["TC-016"],
+      "sha256": "deb1f34288d6eb48aaa2478448f3ef513a4ff02cf72ec28a46b755ec0fa8528c",
+      "size_bytes": 22020097
+    },
+    {
+      "name": "fake.pdf",
+      "purpose": "1x1 PNG with a .pdf name, no %PDF- signature",
+      "expected_result": "not_pdf",
+      "test_cases": ["TC-015"],
+      "sha256": "a4d4c009619311d9b83904acfd62fe3b7f918c312522bbcc6ad51cdec4fd1edf",
+      "size_bytes": 67
+    },
+    {
+      "name": "encrypted.pdf",
+      "purpose": "Copy of 01 encrypted with AES-256 (V5 R6), password \"secret\"",
+      "expected_result": "pdf_encrypted",
+      "test_cases": ["TC-017"],
+      "sha256": "d0c9a6c516546f1b5aa3f359adebc640ae9be3f840aa991802d5fd90370b3961",
+      "size_bytes": 80083
+    },
+    {
+      "name": "broken.pdf",
+      "purpose": "First half of 01: %PDF- signature present, pypdf cannot open it",
+      "expected_result": "pdf_unreadable",
+      "test_cases": ["TC-018"],
+      "sha256": "350ef737fe38881e80ceef3a6d43cd15546429da45038fb2d4287bea21111dc2",
+      "size_bytes": 39557
+    },
+    {
+      "name": "cyrillic «имя» файла.pdf",
+      "purpose": "Byte copy of 01 with Cyrillic letters and guillemets in the file name",
+      "expected_result": "ok",
+      "test_cases": ["TC-024"],
+      "sha256": "7ad726f5a3663e693c376562e03a2e9cc13c800112e92c09ff4f3f959560cc93",
+      "size_bytes": 79114
+    }
+  ]
+}

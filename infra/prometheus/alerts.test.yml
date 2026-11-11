@@ -1,0 +1,79 @@
+# promtool test rules: each alert fires on its condition and stays silent below it.
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # 2 of 100 requests per minute fail: 2% > 1%.
+      - series: 'http_requests_total{method="GET", route="/api/v1/documents", status="200"}'
+        values: "0+98x15"
+      - series: 'http_requests_total{method="GET", route="/api/v1/documents", status="500"}'
+        values: "0+2x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ApiServerErrorsAbove1Percent
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations:
+              summary: More than 1% of API responses are 5xx for 5 minutes
+
+  - interval: 1m
+    input_series:
+      # 1 of 1000 requests per minute fails: 0.1% stays below the threshold.
+      - series: 'http_requests_total{method="GET", route="/api/v1/documents", status="200"}'
+        values: "0+999x15"
+      - series: 'http_requests_total{method="GET", route="/api/v1/documents", status="500"}'
+        values: "0+1x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ApiServerErrorsAbove1Percent
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      # Every request of the list takes between 0.5 and 1 s.
+      - series: 'http_request_duration_seconds_bucket{method="GET", route="/api/v1/documents", le="0.3"}'
+        values: "0x15"
+      - series: 'http_request_duration_seconds_bucket{method="GET", route="/api/v1/documents", le="1"}'
+        values: "0+60x15"
+      - series: 'http_request_duration_seconds_bucket{method="GET", route="/api/v1/documents", le="+Inf"}'
+        values: "0+60x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: DocumentListP95Above300ms
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations:
+              summary: p95 of GET /api/v1/documents is above 300 ms for 5 minutes
+
+  - interval: 1m
+    input_series:
+      # Every request of the list is under 0.1 s.
+      - series: 'http_request_duration_seconds_bucket{method="GET", route="/api/v1/documents", le="0.1"}'
+        values: "0+60x15"
+      - series: 'http_request_duration_seconds_bucket{method="GET", route="/api/v1/documents", le="0.3"}'
+        values: "0+60x15"
+      - series: 'http_request_duration_seconds_bucket{method="GET", route="/api/v1/documents", le="+Inf"}'
+        values: "0+60x15"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: DocumentListP95Above300ms
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'kek_errors_total{operation="open_workspace_keys"}'
+        values: "0 0 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: KekErrors
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations:
+              summary: The API failed to read or use the KEK in the last 5 minutes
+      - eval_time: 2m
+        alertname: KekErrors
+        exp_alerts: []

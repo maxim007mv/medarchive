@@ -1,0 +1,204 @@
+name: medarchive
+
+x-api-image: &api-image
+  build: ./apps/api
+  # IMAGE_TAG keeps a second stack (the QA gate) from retagging the images of the first.
+  image: medarchive/api:${IMAGE_TAG:-local}
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+# mem_limit: at least twice the peak seen under the QA gate (api 430 MiB, minio 325 MiB, web 95 MiB,
+# worker 90 MiB, db 75 MiB), so a runaway service is killed alone instead of the Docker VM (D-011).
+services:
+  db:
+    image: postgres:17-alpine
+    mem_limit: 1g
+    environment:
+      POSTGRES_DB: medarchive
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run make secrets}
+      MA_OWNER_PASSWORD: ${MA_OWNER_PASSWORD:?run make secrets}
+      MA_APP_PASSWORD: ${MA_APP_PASSWORD:?run make secrets}
+      MA_WORKER_PASSWORD: ${MA_WORKER_PASSWORD:?run make secrets}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # TCP, not the socket: the init-time server listens only on the socket.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "medarchive"]
+      interval: 5s
+      retries: 20
+
+  minio:
+    # Official minio/minio images are no longer published; pgsty/minio is the maintained fork.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    mem_limit: 1g
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?run make secrets}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run make secrets}
+      # MinIO has no per-bucket CORS (PutBucketCors is not implemented), so the allowed origin
+      # is server-wide. Only ma-quarantine is meant for the browser (presigned POST).
+      # The second origin is the https entry of the `tls` profile (ADR-048 fallback for E2E).
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:${WEB_PORT:-3000},https://localhost:${TLS_WEB_PORT:-3443}
+    volumes:
+      - minio_data:/data
+    # 9000 is published because the browser uploads with presigned POST straight to storage.
+    ports: ["127.0.0.1:${MINIO_PORT:-9000}:9000", "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      retries: 20
+
+  minio-init:
+    image: pgsty/mc:RELEASE.2026-10-26T00-00-00Z
+    entrypoint: ["/bin/sh", "/init/init.sh"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?run make secrets}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?run make secrets}
+    volumes:
+      - ./infra/minio:/init:ro
+    depends_on:
+      minio: { condition: service_healthy }
+
+  redis:
+    image: redis:7-alpine
+    mem_limit: 128m
+    # Rate-limit counters only: nothing worth persisting. Every key has a TTL, so past maxmemory
+    # the soonest to expire go first instead of the container being killed.
+    command:
+      ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "volatile-ttl"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  migrate:
+    <<: [*api-image, *hardening]
+    command: ["sh", "-c", "if [ -f alembic.ini ]; then exec alembic upgrade head; fi"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ma_owner:${MA_OWNER_PASSWORD}@db:5432/medarchive
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    <<: [*api-image, *hardening]
+    # Four uvicorn processes (app.serve, k6 p95) at up to ~300 MiB each under E2E uploads.
+    mem_limit: 1536m
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ma_app:${MA_APP_PASSWORD}@db:5432/medarchive
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_PORT:-9000}}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_QUARANTINE: ma-quarantine
+      S3_BUCKET_DOCS: ma-docs
+      KEK_KEYSET_PATH: /run/secrets/kek_keyset
+      CSRF_SECRET: ${CSRF_SECRET:?run make secrets}
+      PAGE_TOKEN_KEY: ${PAGE_TOKEN_KEY:?run make secrets}
+      # BE-12: proxies whose X-Forwarded-For is believed (JSON list of networks, D-005) and the
+      # limits switch the gate turns off for functional E2E and k6 (D-006). Only the web
+      # container is trusted, not the subnet: host connections to the published port arrive
+      # from the network gateway and must not be able to choose their own address.
+      TRUSTED_PROXIES: '["${NET_PREFIX:-10.157.0}.10/32"]'
+      RATE_LIMITS_ENABLED: ${RATE_LIMITS_ENABLED:-true}
+    secrets: [kek_keyset]
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      minio-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  # BE-13: deletes what the API only marked or let expire; never decrypts, so no KEK.
+  worker:
+    <<: [*api-image, *hardening]
+    mem_limit: 256m
+    command: ["python", "-m", "app.workers.purge"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ma_worker:${MA_WORKER_PASSWORD}@db:5432/medarchive
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_QUARANTINE: ma-quarantine
+      S3_BUCKET_DOCS: ma-docs
+    # The image's HEALTHCHECK probes the API port, which the worker does not open. Disabling it
+    # instead makes `docker compose up --wait` fail, so probe what the worker needs to purge.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import socket; [socket.create_connection(a, 2).close() for a in (("db", 5432), ("minio", 9000))]
+      interval: 30s
+      retries: 3
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      minio-init: { condition: service_completed_successfully }
+
+  web:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        API_ORIGIN: http://api:8000
+    image: medarchive/web:${IMAGE_TAG:-local}
+    mem_limit: 512m
+    environment:
+      # CSP connect-src: the browser uploads to storage with presigned POST (apps/web/middleware.ts).
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_PORT:-9000}}
+      # Half of mem_limit: V8 collects before the container limit is reached.
+      NODE_OPTIONS: --max-old-space-size=256
+    tmpfs: [/tmp, /app/apps/web/.next/cache]
+    networks:
+      default:
+        ipv4_address: ${NET_PREFIX:-10.157.0}.10
+    ports: ["127.0.0.1:${WEB_PORT:-3000}:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  # ADR-048 fallback, E2E only (`--profile tls`): https in front of web and storage, because
+  # WebKit drops the Secure session cookie on http. Run with S3_PUBLIC_ENDPOINT=https://localhost:9443.
+  tls:
+    <<: *hardening
+    image: caddy:2.11.9-alpine
+    mem_limit: 256m
+    profiles: [tls]
+    user: "65534:65534"
+    tmpfs: ["/tmp", "/data:mode=1777", "/config:mode=1777"]
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    ports: ["127.0.0.1:${TLS_WEB_PORT:-3443}:3443", "127.0.0.1:${TLS_STORAGE_PORT:-9443}:9443"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--no-check-certificate", "-O", "/dev/null", "https://localhost:3443/"]
+      interval: 5s
+      retries: 20
+    depends_on:
+      web: { condition: service_healthy }
+      minio: { condition: service_healthy }
+
+networks:
+  default:
+    # Fixed so the web address in TRUSTED_PROXIES is known. Every stack that runs at the same
+    # time needs its own NET_PREFIX: Docker rejects overlapping subnets. Dynamic addresses come
+    # from the upper half, so no other container can take the web address.
+    ipam:
+      config:
+        - subnet: ${NET_PREFIX:-10.157.0}.0/24
+          ip_range: ${NET_PREFIX:-10.157.0}.128/25
+
+secrets:
+  kek_keyset:
+    file: ./secrets/kek_keyset.json
+
+volumes:
+  pg_data:
+  minio_data:

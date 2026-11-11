@@ -1,0 +1,4125 @@
+openapi: 3.1.0
+info:
+  title: Медархив API
+  version: 1.0.0
+  description: 'Контракт v1. Правила и обоснования: 01_common/06-api-contract.md. Ошибки RFC 9457, идемпотентность по Idempotency-Key, оптимистичная конкурентность по ETag/If-Match, лимиты с 429 + Retry-After
+    и заголовками RateLimit. Вебхуков в v1 нет.'
+servers:
+- url: /
+  description: Тот же домен, что и веб-клиент
+security:
+- session: []
+tags:
+- name: workspaces
+- name: session
+- name: sessions
+- name: workspace
+- name: documentTypes
+- name: uploads
+- name: suggestions
+- name: documents
+- name: exports
+- name: health
+paths:
+  /api/v1/workspaces:
+    post:
+      operationId: workspaces.create
+      summary: Создать архив, сессию и принять согласие
+      tags:
+      - workspaces
+      description: 'Без consent.accepted = true ответ 422 validation_error (схема требует const true), архив не создаётся. Повтор с тем же Idempotency-Key возвращает тот же архив и тот же access_key, но
+        новую сессию: новые Set-Cookie и csrf_token (ADR-045).'
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkspaceCreate'
+            example:
+              consent:
+                policy_version: '2026-11-10'
+                accepted: true
+              timezone: Europe/Moscow
+      responses:
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceCreated'
+              example:
+                workspace:
+                  id: 01930c6e-7b1a-7c2e-9f4e-3a5d2b1c0e9f
+                  created_at: '2026-11-10T16:00:02Z'
+                  document_count: 0
+                access_key: 7K3M-Q9TB-2XRA-HC4D-P8WN-6YFE
+                csrf_token: b9V4
+                scopes:
+                - documents:read
+                - documents:write
+                - exports:create
+                - workspace:manage
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SetSession'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: validation_error (в том числе consent.accepted не true), idempotency_key_reused'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validation_error:
+                  value:
+                    type: urn:problem-type:medarchive:validation_error
+                    title: Проверьте выделенные поля
+                    status: 422
+                    code: validation_error
+                    request_id: req_01930c9a
+                idempotency_key_reused:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_reused
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 422
+                    code: idempotency_key_reused
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '400':
+          description: 'Ошибка, коды: idempotency_key_missing'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_key_missing:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_missing
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 400
+                    code: idempotency_key_missing
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '409':
+          description: 'Ошибка, коды: idempotency_in_progress'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_in_progress:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_in_progress
+                    title: Сохраняем, подождите секунду
+                    status: 409
+                    code: idempotency_in_progress
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/session:
+    get:
+      operationId: session.get
+      summary: Текущая сессия и CSRF-токен
+      tags:
+      - session
+      security:
+      - session:
+        - documents:read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/sessions:
+    post:
+      operationId: sessions.create
+      summary: Открыть архив по ключу доступа
+      tags:
+      - sessions
+      description: 'Лимит 5 попыток за 15 минут на IP: пятая неверная попытка получает 401 access_key_invalid, шестая и следующие до конца окна получают 429 rate_limited с Retry-After. Время ответа одинаковое
+        для неизвестного lookup_id и неверного секрета.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessKeyLogin'
+            example:
+              access_key: 7K3M-Q9TB-2XRA-HC4D-P8WN-6YFE
+      responses:
+        '201':
+          description: Сессия создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SetSession'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: validation_error'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validation_error:
+                  value:
+                    type: urn:problem-type:medarchive:validation_error
+                    title: Проверьте выделенные поля
+                    status: 422
+                    code: validation_error
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: access_key_invalid'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                access_key_invalid:
+                  value:
+                    type: urn:problem-type:medarchive:access_key_invalid
+                    title: Ключ не подошёл. Проверьте символы
+                    status: 401
+                    code: access_key_invalid
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/sessions/current:
+    delete:
+      operationId: sessions.delete
+      summary: Выйти на этом устройстве
+      tags:
+      - sessions
+      security:
+      - session:
+        - documents:read
+      parameters:
+      - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Сессия отозвана
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/workspace:
+    get:
+      operationId: workspace.get
+      summary: Сводка архива
+      tags:
+      - workspace
+      security:
+      - session:
+        - documents:read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+    delete:
+      operationId: workspace.delete
+      summary: Удалить архив целиком (отзыв согласия)
+      tags:
+      - workspace
+      description: Лимит 1 удаление в час на сессию считает только принятые удаления (202). Любой другой ответ (401, 403, 412, 428, 429, 500) лимит не расходует (ADR-051).
+      security:
+      - session:
+        - workspace:manage
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '202':
+          description: Удаление запланировано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionScheduled'
+              example:
+                status: scheduled
+                purge_before: '2026-11-11T16:30:00Z'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '428':
+          description: 'Ошибка, коды: precondition_required'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                precondition_required:
+                  value:
+                    type: urn:problem-type:medarchive:precondition_required
+                    title: Обновите страницу и повторите
+                    status: 428
+                    code: precondition_required
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '412':
+          description: 'Ошибка, коды: version_conflict'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                version_conflict:
+                  value:
+                    type: urn:problem-type:medarchive:version_conflict
+                    title: Документ изменился в другой вкладке. Обновите, чтобы увидеть новую версию
+                    status: 412
+                    code: version_conflict
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/workspace/access-key:
+    post:
+      operationId: workspace.rotateKey
+      summary: Выпустить новый ключ доступа, старый отозвать
+      tags:
+      - workspace
+      security:
+      - session:
+        - workspace:manage
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessKeyIssued'
+              example:
+                access_key: M2QF-8RZD-K4VT-1NXE-B7HC-0PAW
+                revoked_previous: true
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '400':
+          description: 'Ошибка, коды: idempotency_key_missing'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_key_missing:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_missing
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 400
+                    code: idempotency_key_missing
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: idempotency_key_reused'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_key_reused:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_reused
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 422
+                    code: idempotency_key_reused
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '409':
+          description: 'Ошибка, коды: idempotency_in_progress'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_in_progress:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_in_progress
+                    title: Сохраняем, подождите секунду
+                    status: 409
+                    code: idempotency_in_progress
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/document-types:
+    get:
+      operationId: documentTypes.list
+      summary: Справочник типов
+      tags:
+      - documentTypes
+      security:
+      - session:
+        - documents:read
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PublicMaxAge'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentTypeList'
+              example:
+                items:
+                - code: analysis
+                  title: Анализ
+                - code: conclusion
+                  title: Заключение
+                - code: other
+                  title: Другое
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/uploads:
+    post:
+      operationId: uploads.create
+      summary: Получить presigned POST для PDF
+      tags:
+      - uploads
+      description: 'Клиент отправляет multipart/form-data прямо в url с полями fields и файлом последним полем. Политика содержит content-length-range 1..20971520 и точный key. Три срока: подпись политики
+        действует 15 минут (expires_at); строка uploads живёт 1 час, после этого POST /api/v1/documents с этим upload_id даёт 410 upload_expired; правило жизненного цикла бакета карантина удаляет объект
+        через 1 день.'
+      security:
+      - session:
+        - documents:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadCreate'
+            example:
+              original_name: 01-general-blood-test.pdf
+              size_bytes: 79114
+              content_type: application/pdf
+      responses:
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Upload'
+              example:
+                upload_id: 01930c70-1f2a-7d3b-8c4d-5e6f7a8b9c0d
+                url: https://storage.yandexcloud.net/ma-quarantine
+                fields:
+                  key: q/01930c6e/01930c70.bin
+                  Content-Type: application/pdf
+                  policy: eyJleHBpcmF0aW9uIjoi
+                  x-amz-algorithm: AWS4-HMAC-SHA256
+                  x-amz-credential: AKID/20261110/ru-central1/s3/aws4_request
+                  x-amz-date: 20261110T160010Z
+                  x-amz-signature: 9f2c
+                max_bytes: 20971520
+                expires_at: '2026-11-10T16:15:10Z'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: validation_error, idempotency_key_reused'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validation_error:
+                  value:
+                    type: urn:problem-type:medarchive:validation_error
+                    title: Проверьте выделенные поля
+                    status: 422
+                    code: validation_error
+                    request_id: req_01930c9a
+                idempotency_key_reused:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_reused
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 422
+                    code: idempotency_key_reused
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '415':
+          description: 'Ошибка, коды: not_pdf'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                not_pdf:
+                  value:
+                    type: urn:problem-type:medarchive:not_pdf
+                    title: 'Файл не добавлен: это не PDF. Сохраните документ в PDF и попробуйте снова'
+                    status: 415
+                    code: not_pdf
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '413':
+          description: 'Ошибка, коды: file_too_large'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                file_too_large:
+                  value:
+                    type: urn:problem-type:medarchive:file_too_large
+                    title: Файл больше 20 МБ. Сожмите PDF или разделите его на части
+                    status: 413
+                    code: file_too_large
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '400':
+          description: 'Ошибка, коды: idempotency_key_missing'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_key_missing:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_missing
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 400
+                    code: idempotency_key_missing
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '409':
+          description: 'Ошибка, коды: idempotency_in_progress'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_in_progress:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_in_progress
+                    title: Сохраняем, подождите секунду
+                    status: 409
+                    code: idempotency_in_progress
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/suggestions:
+    post:
+      operationId: suggestions.create
+      summary: AI-подсказка полей по загруженному PDF
+      tags:
+      - suggestions
+      security:
+      - session:
+        - documents:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestionCreate'
+            example:
+              upload_id: 01930c70-1f2a-7d3b-8c4d-5e6f7a8b9c0d
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suggestion'
+              example:
+                title: Липидограмма
+                type: analysis
+                document_date: '2026-05-21'
+                evidence:
+                  document_date: Дата документа 21.05.2026
+                source: pdf_text_layer
+                model: yandexgpt-lite
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '404':
+          description: 'Ошибка, коды: upload_not_found'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                upload_not_found:
+                  value:
+                    type: urn:problem-type:medarchive:upload_not_found
+                    title: Загрузка не найдена. Выберите файл ещё раз
+                    status: 404
+                    code: upload_not_found
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '410':
+          description: 'Ошибка, коды: upload_expired'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                upload_expired:
+                  value:
+                    type: urn:problem-type:medarchive:upload_expired
+                    title: Загрузка устарела. Выберите файл ещё раз
+                    status: 410
+                    code: upload_expired
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '409':
+          description: 'Ошибка, коды: upload_incomplete, idempotency_in_progress'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                upload_incomplete:
+                  value:
+                    type: urn:problem-type:medarchive:upload_incomplete
+                    title: Файл ещё не загрузился до конца
+                    status: 409
+                    code: upload_incomplete
+                    request_id: req_01930c9a
+                idempotency_in_progress:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_in_progress
+                    title: Сохраняем, подождите секунду
+                    status: 409
+                    code: idempotency_in_progress
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '400':
+          description: 'Ошибка, коды: idempotency_key_missing'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_key_missing:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_missing
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 400
+                    code: idempotency_key_missing
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: idempotency_key_reused'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_key_reused:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_reused
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 422
+                    code: idempotency_key_reused
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited, ai_busy'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+                ai_busy:
+                  value:
+                    type: urn:problem-type:medarchive:ai_busy
+                    title: Подсказка сейчас занята. Заполните поля вручную или повторите через N с
+                    status: 429
+                    code: ai_busy
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '503':
+          description: 'Ошибка, коды: ai_unavailable'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                ai_unavailable:
+                  value:
+                    type: urn:problem-type:medarchive:ai_unavailable
+                    title: Подсказка недоступна. Заполните поля вручную
+                    status: 503
+                    code: ai_unavailable
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/documents:
+    get:
+      operationId: documents.list
+      summary: Список с поиском, фильтрами, сортировкой и курсором
+      tags:
+      - documents
+      security:
+      - session:
+        - documents:read
+      parameters:
+      - $ref: '#/components/parameters/Q'
+      - $ref: '#/components/parameters/Type'
+      - $ref: '#/components/parameters/DateField'
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      - $ref: '#/components/parameters/Undated'
+      - $ref: '#/components/parameters/Tz'
+      - $ref: '#/components/parameters/OrderBy'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentList'
+              example:
+                items:
+                - id: 01930c72-0000-7000-8000-000000000004
+                  title: Заключение терапевта
+                  type: conclusion
+                  document_date: '2026-04-10'
+                  uploaded_at: '2026-11-10T16:04:40Z'
+                  has_note: true
+                  size_bytes: 78083
+                  version: 2
+                - id: 01930c71-2a3b-7c4d-9e5f-6a7b8c9d0e1f
+                  title: Общий анализ крови
+                  type: analysis
+                  document_date: '2026-04-08'
+                  uploaded_at: '2026-11-10T16:02:11Z'
+                  has_note: true
+                  size_bytes: 79114
+                  version: 3
+                - id: 01930c71-0000-7000-8000-000000000002
+                  title: Биохимический анализ крови
+                  type: analysis
+                  document_date: '2026-04-08'
+                  uploaded_at: '2026-11-10T16:03:05Z'
+                  has_note: false
+                  size_bytes: 78110
+                  version: 1
+                total: 6
+                matched: 3
+                undated_excluded: 1
+                next_page_token: ''
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: validation_error, date_range_invalid'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validation_error:
+                  value:
+                    type: urn:problem-type:medarchive:validation_error
+                    title: Проверьте выделенные поля
+                    status: 422
+                    code: validation_error
+                    request_id: req_01930c9a
+                date_range_invalid:
+                  value:
+                    type: urn:problem-type:medarchive:date_range_invalid
+                    title: Начало периода позже конца
+                    status: 422
+                    code: date_range_invalid
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '400':
+          description: 'Ошибка, коды: invalid_page_token'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                invalid_page_token:
+                  value:
+                    type: urn:problem-type:medarchive:invalid_page_token
+                    title: Список обновился. Загружаем заново
+                    status: 400
+                    code: invalid_page_token
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+    post:
+      operationId: documents.create
+      summary: Создать документ из загрузки
+      tags:
+      - documents
+      security:
+      - session:
+        - documents:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentCreate'
+            example:
+              upload_id: 01930c70-1f2a-7d3b-8c4d-5e6f7a8b9c0d
+              title: Общий анализ крови
+              type: analysis
+              document_date: '2026-04-08'
+              note: null
+      responses:
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+              example: &id001
+                id: 01930c71-2a3b-7c4d-9e5f-6a7b8c9d0e1f
+                title: Общий анализ крови
+                type: analysis
+                document_date: '2026-04-08'
+                uploaded_at: '2026-11-10T16:02:11Z'
+                updated_at: '2026-11-10T16:02:11Z'
+                note: null
+                file: &id002
+                  original_name: 01-general-blood-test.pdf
+                  size_bytes: 79114
+                  page_count: 1
+                version: 1
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Location:
+              schema:
+                type: string
+              description: /api/v1/documents/{id}
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: validation_error, title_required, title_too_long, date_invalid, date_in_future, note_too_long, type_unknown, pdf_unreadable, pdf_encrypted, idempotency_key_reused'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validation_error:
+                  value:
+                    type: urn:problem-type:medarchive:validation_error
+                    title: Проверьте выделенные поля
+                    status: 422
+                    code: validation_error
+                    request_id: req_01930c9a
+                title_required:
+                  value:
+                    type: urn:problem-type:medarchive:title_required
+                    title: Введите название документа
+                    status: 422
+                    code: title_required
+                    request_id: req_01930c9a
+                title_too_long:
+                  value:
+                    type: urn:problem-type:medarchive:title_too_long
+                    title: Название длиннее 200 символов
+                    status: 422
+                    code: title_too_long
+                    request_id: req_01930c9a
+                date_invalid:
+                  value:
+                    type: urn:problem-type:medarchive:date_invalid
+                    title: Такой даты нет. Проверьте день и месяц
+                    status: 422
+                    code: date_invalid
+                    request_id: req_01930c9a
+                date_in_future:
+                  value:
+                    type: urn:problem-type:medarchive:date_in_future
+                    title: Дата документа не может быть позже сегодняшней
+                    status: 422
+                    code: date_in_future
+                    request_id: req_01930c9a
+                note_too_long:
+                  value:
+                    type: urn:problem-type:medarchive:note_too_long
+                    title: Заметка длиннее 2000 символов
+                    status: 422
+                    code: note_too_long
+                    request_id: req_01930c9a
+                type_unknown:
+                  value:
+                    type: urn:problem-type:medarchive:type_unknown
+                    title: Выберите тип документа
+                    status: 422
+                    code: type_unknown
+                    request_id: req_01930c9a
+                pdf_unreadable:
+                  value:
+                    type: urn:problem-type:medarchive:pdf_unreadable
+                    title: Не удаётся открыть этот PDF. Возможно, он повреждён
+                    status: 422
+                    code: pdf_unreadable
+                    request_id: req_01930c9a
+                pdf_encrypted:
+                  value:
+                    type: urn:problem-type:medarchive:pdf_encrypted
+                    title: PDF требует пароль для открытия. Снимите пароль и загрузите снова
+                    status: 422
+                    code: pdf_encrypted
+                    request_id: req_01930c9a
+                idempotency_key_reused:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_reused
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 422
+                    code: idempotency_key_reused
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '415':
+          description: 'Ошибка, коды: not_pdf'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                not_pdf:
+                  value:
+                    type: urn:problem-type:medarchive:not_pdf
+                    title: 'Файл не добавлен: это не PDF. Сохраните документ в PDF и попробуйте снова'
+                    status: 415
+                    code: not_pdf
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '404':
+          description: 'Ошибка, коды: upload_not_found'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                upload_not_found:
+                  value:
+                    type: urn:problem-type:medarchive:upload_not_found
+                    title: Загрузка не найдена. Выберите файл ещё раз
+                    status: 404
+                    code: upload_not_found
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '410':
+          description: 'Ошибка, коды: upload_expired'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                upload_expired:
+                  value:
+                    type: urn:problem-type:medarchive:upload_expired
+                    title: Загрузка устарела. Выберите файл ещё раз
+                    status: 410
+                    code: upload_expired
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '409':
+          description: 'Ошибка, коды: upload_incomplete, idempotency_in_progress'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                upload_incomplete:
+                  value:
+                    type: urn:problem-type:medarchive:upload_incomplete
+                    title: Файл ещё не загрузился до конца
+                    status: 409
+                    code: upload_incomplete
+                    request_id: req_01930c9a
+                idempotency_in_progress:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_in_progress
+                    title: Сохраняем, подождите секунду
+                    status: 409
+                    code: idempotency_in_progress
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '400':
+          description: 'Ошибка, коды: idempotency_key_missing'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_key_missing:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_missing
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 400
+                    code: idempotency_key_missing
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient, consent_required'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+                consent_required:
+                  value:
+                    type: urn:problem-type:medarchive:consent_required
+                    title: Чтобы хранить медицинские документы, нужно ваше согласие
+                    status: 403
+                    code: consent_required
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '503':
+          description: 'Ошибка, коды: storage_unavailable'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                storage_unavailable:
+                  value:
+                    type: urn:problem-type:medarchive:storage_unavailable
+                    title: Хранилище временно недоступно. Попробуйте через минуту
+                    status: 503
+                    code: storage_unavailable
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/documents/{document_id}:
+    parameters:
+    - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: documents.get
+      summary: Карточка документа
+      tags:
+      - documents
+      security:
+      - session:
+        - documents:read
+      parameters:
+      - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+              example: *id001
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '304':
+          description: Не изменился (If-None-Match)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '404':
+          description: 'Ошибка, коды: not_found'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                not_found:
+                  value:
+                    type: urn:problem-type:medarchive:not_found
+                    title: Документ не найден. Возможно, он удалён
+                    status: 404
+                    code: not_found
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+    patch:
+      operationId: documents.update
+      summary: Изменить название, тип, дату или заметку
+      tags:
+      - documents
+      security:
+      - session:
+        - documents:write
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentPatch'
+            example:
+              note: Холестерин выше нормы, пересдать в октябре.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+              example:
+                id: 01930c71-2a3b-7c4d-9e5f-6a7b8c9d0e1f
+                title: Общий анализ крови
+                type: analysis
+                document_date: '2026-04-08'
+                uploaded_at: '2026-11-10T16:02:11Z'
+                updated_at: '2026-11-10T16:02:11Z'
+                note: Холестерин выше нормы, пересдать в октябре.
+                file: *id002
+                version: 4
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: validation_error, title_required, title_too_long, date_invalid, date_in_future, note_too_long, type_unknown'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validation_error:
+                  value:
+                    type: urn:problem-type:medarchive:validation_error
+                    title: Проверьте выделенные поля
+                    status: 422
+                    code: validation_error
+                    request_id: req_01930c9a
+                title_required:
+                  value:
+                    type: urn:problem-type:medarchive:title_required
+                    title: Введите название документа
+                    status: 422
+                    code: title_required
+                    request_id: req_01930c9a
+                title_too_long:
+                  value:
+                    type: urn:problem-type:medarchive:title_too_long
+                    title: Название длиннее 200 символов
+                    status: 422
+                    code: title_too_long
+                    request_id: req_01930c9a
+                date_invalid:
+                  value:
+                    type: urn:problem-type:medarchive:date_invalid
+                    title: Такой даты нет. Проверьте день и месяц
+                    status: 422
+                    code: date_invalid
+                    request_id: req_01930c9a
+                date_in_future:
+                  value:
+                    type: urn:problem-type:medarchive:date_in_future
+                    title: Дата документа не может быть позже сегодняшней
+                    status: 422
+                    code: date_in_future
+                    request_id: req_01930c9a
+                note_too_long:
+                  value:
+                    type: urn:problem-type:medarchive:note_too_long
+                    title: Заметка длиннее 2000 символов
+                    status: 422
+                    code: note_too_long
+                    request_id: req_01930c9a
+                type_unknown:
+                  value:
+                    type: urn:problem-type:medarchive:type_unknown
+                    title: Выберите тип документа
+                    status: 422
+                    code: type_unknown
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '404':
+          description: 'Ошибка, коды: not_found'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                not_found:
+                  value:
+                    type: urn:problem-type:medarchive:not_found
+                    title: Документ не найден. Возможно, он удалён
+                    status: 404
+                    code: not_found
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '428':
+          description: 'Ошибка, коды: precondition_required'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                precondition_required:
+                  value:
+                    type: urn:problem-type:medarchive:precondition_required
+                    title: Обновите страницу и повторите
+                    status: 428
+                    code: precondition_required
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '412':
+          description: 'Ошибка, коды: version_conflict'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                version_conflict:
+                  value:
+                    type: urn:problem-type:medarchive:version_conflict
+                    title: Документ изменился в другой вкладке. Обновите, чтобы увидеть новую версию
+                    status: 412
+                    code: version_conflict
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+    delete:
+      operationId: documents.delete
+      summary: Удалить документ
+      tags:
+      - documents
+      security:
+      - session:
+        - documents:write
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Удалён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '404':
+          description: 'Ошибка, коды: not_found'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                not_found:
+                  value:
+                    type: urn:problem-type:medarchive:not_found
+                    title: Документ не найден. Возможно, он удалён
+                    status: 404
+                    code: not_found
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '428':
+          description: 'Ошибка, коды: precondition_required'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                precondition_required:
+                  value:
+                    type: urn:problem-type:medarchive:precondition_required
+                    title: Обновите страницу и повторите
+                    status: 428
+                    code: precondition_required
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '412':
+          description: 'Ошибка, коды: version_conflict'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                version_conflict:
+                  value:
+                    type: urn:problem-type:medarchive:version_conflict
+                    title: Документ изменился в другой вкладке. Обновите, чтобы увидеть новую версию
+                    status: 412
+                    code: version_conflict
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/documents/{document_id}/content:
+    parameters:
+    - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: documents.content
+      summary: PDF для просмотра или скачивания (поток, Range)
+      tags:
+      - documents
+      security:
+      - session:
+        - documents:read
+      parameters:
+      - name: disposition
+        in: query
+        schema:
+          type: string
+          enum:
+          - inline
+          - attachment
+          default: inline
+      - name: Range
+        in: header
+        required: false
+        schema:
+          type: string
+        example: bytes=0-65535
+      responses:
+        '200':
+          description: PDF
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Content-Disposition:
+              schema:
+                type: string
+            Content-Security-Policy:
+              schema:
+                type: string
+                const: sandbox
+            X-Content-Type-Options:
+              schema:
+                type: string
+                const: nosniff
+            Accept-Ranges:
+              schema:
+                type: string
+                const: bytes
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Часть файла
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Content-Disposition:
+              schema:
+                type: string
+            Content-Security-Policy:
+              schema:
+                type: string
+                const: sandbox
+            X-Content-Type-Options:
+              schema:
+                type: string
+                const: nosniff
+            Accept-Ranges:
+              schema:
+                type: string
+                const: bytes
+            Content-Range:
+              $ref: '#/components/headers/ContentRange'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '404':
+          description: 'Ошибка, коды: not_found'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                not_found:
+                  value:
+                    type: urn:problem-type:medarchive:not_found
+                    title: Документ не найден. Возможно, он удалён
+                    status: 404
+                    code: not_found
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '503':
+          description: 'Ошибка, коды: storage_unavailable'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                storage_unavailable:
+                  value:
+                    type: urn:problem-type:medarchive:storage_unavailable
+                    title: Хранилище временно недоступно. Попробуйте через минуту
+                    status: 503
+                    code: storage_unavailable
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/exports:
+    post:
+      operationId: exports.create
+      summary: Собрать экспорт
+      tags:
+      - exports
+      security:
+      - session:
+        - exports:create
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportCreate'
+            example:
+              scope: filtered
+              filter:
+                q: анализ
+      responses:
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Export'
+              example:
+                id: 01930c80-0000-7000-8000-000000000001
+                scope: filtered
+                document_count: 2
+                total_bytes: 158230
+                content_url: /api/v1/exports/01930c80-0000-7000-8000-000000000001/content
+                expires_at: '2026-11-10T17:31:00Z'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '422':
+          description: 'Ошибка, коды: validation_error, idempotency_key_reused'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validation_error:
+                  value:
+                    type: urn:problem-type:medarchive:validation_error
+                    title: Проверьте выделенные поля
+                    status: 422
+                    code: validation_error
+                    request_id: req_01930c9a
+                idempotency_key_reused:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_reused
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 422
+                    code: idempotency_key_reused
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '400':
+          description: 'Ошибка, коды: idempotency_key_missing'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_key_missing:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_key_missing
+                    title: Не получилось сохранить. Попробуйте ещё раз
+                    status: 400
+                    code: idempotency_key_missing
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '409':
+          description: 'Ошибка, коды: idempotency_in_progress'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                idempotency_in_progress:
+                  value:
+                    type: urn:problem-type:medarchive:idempotency_in_progress
+                    title: Сохраняем, подождите секунду
+                    status: 409
+                    code: idempotency_in_progress
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: csrf_failed, scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                csrf_failed:
+                  value:
+                    type: urn:problem-type:medarchive:csrf_failed
+                    title: Страница устарела. Обновите её
+                    status: 403
+                    code: csrf_failed
+                    request_id: req_01930c9a
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /api/v1/exports/{export_id}/content:
+    parameters:
+    - name: export_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      operationId: exports.content
+      summary: Скачать ZIP потоком
+      tags:
+      - exports
+      security:
+      - session:
+        - exports:create
+      responses:
+        '200':
+          description: 'ZIP: PDF, documents.csv, documents.json'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="medarchive_2026-11-10.zip"
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 'Ошибка, коды: not_found'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                not_found:
+                  value:
+                    type: urn:problem-type:medarchive:not_found
+                    title: Документ не найден. Возможно, он удалён
+                    status: 404
+                    code: not_found
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '401':
+          description: 'Ошибка, коды: unauthenticated'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unauthenticated:
+                  value:
+                    type: urn:problem-type:medarchive:unauthenticated
+                    title: Сессия закончилась. Откройте архив ключом доступа
+                    status: 401
+                    code: unauthenticated
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '403':
+          description: 'Ошибка, коды: scope_insufficient'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                scope_insufficient:
+                  value:
+                    type: urn:problem-type:medarchive:scope_insufficient
+                    title: Это действие недоступно по этой ссылке
+                    status: 403
+                    code: scope_insufficient
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+        '429':
+          description: 'Ошибка, коды: rate_limited'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rate_limited:
+                  value:
+                    type: urn:problem-type:medarchive:rate_limited
+                    title: Слишком много действий подряд. Повторите через N с
+                    status: 429
+                    code: rate_limited
+                    request_id: req_01930c9a
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '500':
+          description: 'Ошибка, коды: internal'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                internal:
+                  value:
+                    type: urn:problem-type:medarchive:internal
+                    title: Не получилось выполнить действие. Попробуйте ещё раз через минуту
+                    status: 500
+                    code: internal
+                    request_id: req_01930c9a
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimitPolicy'
+  /healthz:
+    get:
+      operationId: health.live
+      summary: Живость
+      security: []
+      tags:
+      - health
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+  /readyz:
+    get:
+      operationId: health.ready
+      summary: Готовность (БД, хранилище, KMS)
+      security: []
+      tags:
+      - health
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '503':
+          description: Не готов
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: __Host-ma_sid
+      description: 'BFF-сессия. Скоупы: documents:read, documents:write, exports:create, workspace:manage. Изменяющие запросы требуют X-CSRF-Token.'
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+          enum:
+          - validation_error
+          - title_required
+          - title_too_long
+          - date_invalid
+          - date_in_future
+          - date_range_invalid
+          - note_too_long
+          - type_unknown
+          - not_pdf
+          - file_too_large
+          - pdf_unreadable
+          - pdf_encrypted
+          - upload_not_found
+          - upload_expired
+          - upload_incomplete
+          - not_found
+          - precondition_required
+          - version_conflict
+          - idempotency_key_missing
+          - idempotency_key_reused
+          - idempotency_in_progress
+          - invalid_page_token
+          - unauthenticated
+          - access_key_invalid
+          - csrf_failed
+          - scope_insufficient
+          - consent_required
+          - rate_limited
+          - ai_busy
+          - ai_unavailable
+          - storage_unavailable
+          - internal
+        request_id:
+          type: string
+        etag:
+          type: string
+          description: Текущий ETag при version_conflict
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              pointer:
+                type: string
+              code:
+                type: string
+              title:
+                type: string
+            required:
+            - pointer
+            - code
+            - title
+            additionalProperties: false
+      required:
+      - type
+      - title
+      - status
+      - code
+      - request_id
+    WorkspaceCreate:
+      type: object
+      properties:
+        consent:
+          type: object
+          properties:
+            policy_version:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+            accepted:
+              type: boolean
+              const: true
+          required:
+          - policy_version
+          - accepted
+          additionalProperties: false
+        timezone:
+          type: string
+          maxLength: 64
+      required:
+      - consent
+      additionalProperties: false
+    WorkspaceCreated:
+      type: object
+      properties:
+        workspace:
+          $ref: '#/components/schemas/Workspace'
+        access_key:
+          type: string
+          pattern: ^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){5}$
+        csrf_token:
+          type: string
+        scopes: &id005
+          type: array
+          items:
+            type: string
+            enum:
+            - documents:read
+            - documents:write
+            - exports:create
+            - workspace:manage
+      required:
+      - workspace
+      - access_key
+      - csrf_token
+      - scopes
+      additionalProperties: false
+    Workspace:
+      type: object
+      properties:
+        id: &id004
+          type: string
+          format: uuid
+        created_at: &id003
+          type: string
+          format: date-time
+        document_count:
+          type: integer
+          minimum: 0
+        total_bytes:
+          type: integer
+          minimum: 0
+        undated_count:
+          type: integer
+          minimum: 0
+        consent:
+          type: object
+          properties:
+            policy_version:
+              type: string
+            accepted_at: *id003
+          additionalProperties: false
+      required:
+      - id
+      - created_at
+      - document_count
+      additionalProperties: false
+    Session:
+      type: object
+      properties:
+        workspace_id: *id004
+        csrf_token:
+          type: string
+        scopes: *id005
+        idle_expires_at: *id003
+        timezone:
+          type: string
+      required:
+      - workspace_id
+      - csrf_token
+      - scopes
+      additionalProperties: false
+    AccessKeyLogin:
+      type: object
+      properties:
+        access_key:
+          type: string
+          minLength: 24
+          maxLength: 29
+      required:
+      - access_key
+      additionalProperties: false
+    AccessKeyIssued:
+      type: object
+      properties:
+        access_key:
+          type: string
+        revoked_previous:
+          type: boolean
+      required:
+      - access_key
+      - revoked_previous
+      additionalProperties: false
+    DeletionScheduled:
+      type: object
+      properties:
+        status:
+          type: string
+          const: scheduled
+        purge_before: *id003
+      required:
+      - status
+      - purge_before
+      additionalProperties: false
+    DocumentTypeList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              code: &id006
+                type: string
+                enum:
+                - analysis
+                - conclusion
+                - other
+              title:
+                type: string
+            required:
+            - code
+            - title
+            additionalProperties: false
+      required:
+      - items
+      additionalProperties: false
+    UploadCreate:
+      type: object
+      properties:
+        original_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Имя файла на устройстве пользователя; хранится зашифрованным и возвращается в Document.file.original_name
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 20971520
+        content_type:
+          type: string
+          const: application/pdf
+      required:
+      - original_name
+      - size_bytes
+      - content_type
+      additionalProperties: false
+    Upload:
+      type: object
+      properties:
+        upload_id: *id004
+        url:
+          type: string
+          format: uri
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+        max_bytes:
+          type: integer
+        expires_at: *id003
+      required:
+      - upload_id
+      - url
+      - fields
+      - max_bytes
+      - expires_at
+      additionalProperties: false
+    SuggestionCreate:
+      type: object
+      properties:
+        upload_id: *id004
+      required:
+      - upload_id
+      additionalProperties: false
+    Suggestion:
+      type: object
+      properties:
+        title:
+          type:
+          - string
+          - 'null'
+        type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - analysis
+          - conclusion
+          - other
+          - null
+        document_date: &id007
+          type:
+          - string
+          - 'null'
+          format: date
+        evidence:
+          type: object
+          additionalProperties:
+            type: string
+        source:
+          type: string
+          const: pdf_text_layer
+        model:
+          type: string
+      required:
+      - title
+      - type
+      - document_date
+      - source
+      additionalProperties: false
+    DocumentCreate:
+      type: object
+      properties:
+        upload_id: *id004
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        type: *id006
+        document_date: *id007
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
+      required:
+      - upload_id
+      - title
+      - type
+      additionalProperties: false
+    DocumentPatch:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        type: *id006
+        document_date: *id007
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
+      additionalProperties: false
+      minProperties: 1
+    FileInfo:
+      type: object
+      properties:
+        original_name:
+          type: string
+        size_bytes:
+          type: integer
+        page_count:
+          type:
+          - integer
+          - 'null'
+      required:
+      - original_name
+      - size_bytes
+      additionalProperties: false
+    Document:
+      type: object
+      properties:
+        id: *id004
+        title:
+          type: string
+        type: *id006
+        document_date: *id007
+        uploaded_at: *id003
+        updated_at: *id003
+        note:
+          type:
+          - string
+          - 'null'
+        file:
+          $ref: '#/components/schemas/FileInfo'
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - title
+      - type
+      - document_date
+      - uploaded_at
+      - updated_at
+      - note
+      - file
+      - version
+      additionalProperties: false
+    DocumentListItem:
+      type: object
+      properties:
+        id: *id004
+        title:
+          type: string
+        type: *id006
+        document_date: *id007
+        uploaded_at: *id003
+        has_note:
+          type: boolean
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 20971520
+        version:
+          type: integer
+      required:
+      - id
+      - title
+      - type
+      - document_date
+      - uploaded_at
+      - has_note
+      - size_bytes
+      - version
+      additionalProperties: false
+    DocumentList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentListItem'
+        total:
+          type: integer
+        matched:
+          type: integer
+        undated_excluded:
+          type: integer
+        next_page_token:
+          type: string
+      required:
+      - items
+      - total
+      - matched
+      - undated_excluded
+      - next_page_token
+      additionalProperties: false
+    DocumentFilter:
+      type: object
+      properties:
+        q:
+          type: string
+          maxLength: 100
+          pattern: ^\s*$|^\s*(\S\s*){3,}$
+          description: Подстрока в названии без учёта регистра и ё/е (ADR-046). Пустая строка или только пробелы = без поиска; 1 или 2 непробельных символа = 422 validation_error; от 3 непробельных символов
+            = поиск
+        type:
+          type: array
+          items: *id006
+        date_field:
+          type: string
+          enum:
+          - document
+          - uploaded
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        undated:
+          type: boolean
+      additionalProperties: false
+    ExportCreate:
+      type: object
+      properties:
+        scope:
+          type: string
+          enum:
+          - all
+          - filtered
+          - selected
+        filter:
+          $ref: '#/components/schemas/DocumentFilter'
+        document_ids:
+          type: array
+          items: *id004
+          minItems: 1
+          maxItems: 5000
+      required:
+      - scope
+      additionalProperties: false
+    Export:
+      type: object
+      properties:
+        id: *id004
+        scope:
+          type: string
+        document_count:
+          type: integer
+        total_bytes:
+          type: integer
+        content_url:
+          type: string
+        expires_at: *id003
+      required:
+      - id
+      - scope
+      - document_count
+      - total_bytes
+      - content_url
+      - expires_at
+      additionalProperties: false
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 64
+      description: 'Один ключ на одно намерение пользователя; хранится 24 ч (draft-ietf-httpapi-idempotency-key-header). Повтор с тем же телом возвращает сохранённый ответ с Idempotent-Replayed: true (ADR-045)'
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+      example: '"v3"'
+      description: Без заголовка 428, при несовпадении 412
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      schema:
+        type: string
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Значение из GET /api/v1/session
+    DocumentId:
+      name: document_id
+      in: path
+      required: true
+      schema: *id004
+    Q:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 100
+        pattern: ^\s*$|^\s*(\S\s*){3,}$
+      description: Подстрока в названии без учёта регистра и ё/е (ADR-046). Пустая строка или только пробелы = без поиска; 1 или 2 непробельных символа = 422 validation_error; от 3 непробельных символов
+        = поиск
+    Type:
+      name: type
+      in: query
+      required: false
+      schema:
+        type: array
+        items: *id006
+      description: Коды типов
+      style: form
+      explode: false
+    DateField:
+      name: date_field
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+        - document
+        - uploaded
+        default: document
+      description: По какой дате фильтровать
+    From:
+      name: from
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: Начало периода, включительно
+    To:
+      name: to
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: Конец периода, включительно
+    Undated:
+      name: undated
+      in: query
+      required: false
+      schema:
+        type: boolean
+      description: Только документы без даты документа. При undated=true параметры date_field, from и to игнорируются, undated_excluded = 0
+    Tz:
+      name: tz
+      in: query
+      required: false
+      schema:
+        type: string
+      description: IANA-зона для границ суток при date_field=uploaded
+      example: Europe/Moscow
+    OrderBy:
+      name: order_by
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+        - document_date desc
+        - uploaded_at desc
+        default: document_date desc
+      description: AIP-132; без даты всегда последние, тай-брейк uploaded_at по возрастанию, затем id
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+      description: Больше 200 = 422 validation_error (значение не урезается)
+    PageToken:
+      name: page_token
+      in: query
+      required: false
+      schema:
+        type: string
+      description: 'Непрозрачный курсор (AIP-158). В токен входит хэш q, type, date_field, from, to, undated, tz и order_by: токен с другим значением любого из них даёт 400 invalid_page_token'
+  headers:
+    NoStore:
+      schema:
+        type: string
+        const: no-store
+      description: Персональные данные не кэшируются
+    ETag:
+      schema:
+        type: string
+      example: '"v4"'
+    RetryAfter:
+      schema:
+        type: integer
+      description: Секунды до повтора (RFC 9110)
+    RateLimit:
+      schema:
+        type: string
+      example: '"burst";r=27;t=41'
+      description: На каждом ответе лимитируемого маршрута (все маршруты, кроме /healthz и /readyz)
+    RateLimitPolicy:
+      schema:
+        type: string
+      example: '"burst";q=30;w=60'
+      description: 'Квота маршрута из 06-api-contract.md, раздел 3. Лимит «общий» = 300 запросов в минуту на сессию: "general";q=300;w=60'
+    SetSession:
+      schema:
+        type: string
+      example: __Host-ma_sid=...; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000
+    RequestId:
+      schema:
+        type: string
+        maxLength: 64
+      example: req_01930c9a
+      description: Есть в каждом ответе; тот же request_id в теле ошибки и в логах
+    IdempotentReplayed:
+      schema:
+        type: string
+        const: 'true'
+      description: 'Только в ответе на повтор с тем же Idempotency-Key и тем же телом: сохранённый статус и тело первой попытки (ADR-045)'
+    ContentRange:
+      required: true
+      schema:
+        type: string
+      example: bytes 0-65535/79114
+    PublicMaxAge:
+      schema:
+        type: string
+        const: public, max-age=3600
+      description: Справочник не содержит персональных данных и кэшируется на 1 час

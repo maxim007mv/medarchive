@@ -1,0 +1,31 @@
+# ADR-048 fallback for E2E: WebKit in Playwright does not keep the Secure `__Host-ma_sid` cookie on
+# http://localhost, so the browser reaches web and storage over https with Caddy's local CA.
+# Only in the `tls` compose profile; `make up` stays on plain http.
+{
+	auto_https disable_redirects
+	local_certs
+	skip_install_trust
+	admin off
+}
+
+# Idle upstream connections close well before the upstream's own keep-alive (Node 5 s): a request
+# sent on a socket the upstream is closing is reset, and a POST is not retried (502).
+(upstream_keepalive) {
+	transport http {
+		keepalive 2s
+	}
+}
+
+https://localhost:3443 {
+	reverse_proxy web:3000 {
+		import upstream_keepalive
+	}
+}
+
+# Presigned POST goes from the page straight to storage; over http WebKit would block it as
+# mixed content. The POST policy signature does not cover the host, so the proxy is transparent.
+https://localhost:9443 {
+	reverse_proxy minio:9000 {
+		import upstream_keepalive
+	}
+}

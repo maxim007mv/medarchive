@@ -1,0 +1,70 @@
+[project]
+name = "medarchive-api"
+version = "0.1.0"
+description = "Медархив API"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.13",
+    "argon2-cffi>=23",
+    "asyncpg>=0.30",
+    # boto3, not aioboto3: Tink streaming AEAD works on synchronous file objects, so S3 streams
+    # run in a worker thread anyway; aiobotocore also pins botocore to narrow ranges.
+    "boto3>=1.35",
+    "cryptography>=44",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "prometheus-client>=0.21",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pypdf[crypto]>=5",
+    "redis>=5",
+    "sentry-sdk>=2.18",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "structlog>=24.4",
+    "tink>=1.10",
+    "uvicorn[standard]>=0.32",
+    "zipstream-ng>=1.7",
+]
+
+[dependency-groups]
+dev = [
+    "boto3-stubs[s3]>=1.35",
+    "freezegun>=1.5",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "schemathesis>=3.38",
+    "testcontainers[minio,postgres]>=4.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "B", "UP", "S", "ASYNC", "SIM", "PT", "RUF"]
+# User-facing texts are Russian: Cyrillic letters that look like Latin ones are intended.
+allowed-confusables = ["А", "В", "Е", "З", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х", "а", "б", "г", "е", "о", "р", "с", "у", "х"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# Neither package ships type hints (no py.typed, no stubs on PyPI).
+module = ["tink", "tink.*", "zipstream", "zipstream.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

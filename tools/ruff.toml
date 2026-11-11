@@ -1,0 +1,6 @@
+extend = "../apps/api/pyproject.toml"
+
+[lint.per-file-ignores]
+# The gate runs CLI tools (git, docker, pnpm, uv) from PATH with fixed argument lists, and its
+# worktree and logs live in /tmp on purpose (outside the shared working tree).
+"*.py" = ["S108", "S603", "S607"]

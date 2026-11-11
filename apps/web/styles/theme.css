@@ -1,0 +1,199 @@
+/*
+ * Tailwind theme over tokens.css (ADR-050). `inline reference` keeps these keys out of :root:
+ * every utility reads the token variable directly, so both themes come from one markup.
+ * Each namespace is reset first, so only token names produce utilities (no `bg-red-500`).
+ */
+@theme inline reference {
+  --color-*: initial;
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-sunken: var(--c-sunken);
+  --color-raised: var(--c-raised);
+  --color-border: var(--c-border);
+  --color-control: var(--c-control);
+  --color-text: var(--c-text);
+  --color-text2: var(--c-text2);
+  --color-text3: var(--c-text3);
+  --color-primary: var(--c-primary);
+  --color-primary-hover: var(--c-primaryHover);
+  --color-primary-active: var(--c-primaryActive);
+  --color-on-primary: var(--c-onPrimary);
+  --color-accent: var(--c-accent);
+  --color-accent-soft: var(--c-accentSoft);
+  --color-focus: var(--c-focus);
+  --color-analysis: var(--c-analysis);
+  --color-analysis-bg: var(--c-analysisBg);
+  --color-conclusion: var(--c-conclusion);
+  --color-conclusion-bg: var(--c-conclusionBg);
+  --color-other: var(--c-other);
+  --color-other-bg: var(--c-otherBg);
+  --color-warn: var(--c-warn);
+  --color-warn-bg: var(--c-warnBg);
+  --color-danger: var(--c-danger);
+  --color-danger-bg: var(--c-dangerBg);
+  --color-success: var(--c-success);
+  --color-success-bg: var(--c-successBg);
+  --color-disabled-bg: var(--c-disabledBg);
+  --color-disabled-text: var(--c-disabledText);
+  --color-skel: var(--c-skel);
+  --color-skel2: var(--c-skel2);
+  --color-scrim: var(--c-scrim);
+
+  --radius-*: initial;
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-full: var(--radius-full);
+
+  --shadow-*: initial;
+  --shadow-1: var(--shadow-1);
+  --shadow-3: var(--shadow-3);
+  --shadow-dialog: var(--shadow-dialog);
+  --shadow-segment-indicator: var(--component-segmentIndicator);
+  /* Selected radio row: accent border doubled inside (brandbook §6, D12). */
+  --shadow-row-selected: inset 0 0 0 1px var(--c-accent);
+  --shadow-field-focus: var(--component-fieldFocusRing);
+  /* The 1px border plus an inset makes the error border without shifting the content. */
+  --shadow-field-error: inset 0 0 0 calc(var(--component-fieldErrorBorder) - 1px) var(--c-danger);
+
+  --font-*: initial;
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --text-*: initial;
+  --text-display: var(--type-display-size);
+  --text-display--line-height: var(--type-display-line);
+  --text-display--font-weight: var(--type-display-weight);
+  --text-display--letter-spacing: var(--type-display-tracking);
+  --text-h1: var(--type-h1-size);
+  --text-h1--line-height: var(--type-h1-line);
+  --text-h1--font-weight: var(--type-h1-weight);
+  --text-h1--letter-spacing: var(--type-h1-tracking);
+  --text-h2: var(--type-h2-size);
+  --text-h2--line-height: var(--type-h2-line);
+  --text-h2--font-weight: var(--type-h2-weight);
+  --text-h2--letter-spacing: var(--type-h2-tracking);
+  --text-h3: var(--type-h3-size);
+  --text-h3--line-height: var(--type-h3-line);
+  --text-h3--font-weight: var(--type-h3-weight);
+  --text-body-l: var(--type-bodyL-size);
+  --text-body-l--line-height: var(--type-bodyL-line);
+  --text-body-l--font-weight: var(--type-bodyL-weight);
+  --text-body: var(--type-body-size);
+  --text-body--line-height: var(--type-body-line);
+  --text-body--font-weight: var(--type-body-weight);
+  --text-label: var(--type-label-size);
+  --text-label--line-height: var(--type-label-line);
+  --text-label--font-weight: var(--type-label-weight);
+  --text-caption: var(--type-caption-size);
+  --text-caption--line-height: var(--type-caption-line);
+  --text-caption--font-weight: var(--type-caption-weight);
+  --text-mono: var(--type-mono-size);
+  --text-mono--line-height: var(--type-mono-line);
+  --text-mono--font-weight: var(--type-mono-weight);
+  --text-button-lg: var(--type-buttonLg-size);
+  --text-button-lg--line-height: var(--type-buttonLg-line);
+  --text-button-lg--font-weight: var(--type-buttonLg-weight);
+
+  --container-dialog-form: var(--component-dialogWidthForm);
+  --container-dialog-confirm: var(--component-dialogWidthConfirm);
+
+  /* One step of `p-1`, `gap-1`, `size-1`: 4 px from tokens. Tailwind's 0.25rem would follow the
+     14 px root font size and make every step 3.5 px. */
+  --spacing: var(--space-1);
+  --spacing-control-sm: var(--control-heightSm);
+  --spacing-control-md: var(--control-heightMd);
+  --spacing-control-lg: var(--control-heightLg);
+  --spacing-icon-button: var(--control-iconButton);
+  --spacing-icon-button-sm: var(--control-iconButtonSm);
+
+  --transition-duration-fast: var(--dur-fast);
+  --transition-duration-base: var(--dur-base);
+  --transition-duration-slow: var(--dur-slow);
+  --ease-*: initial;
+  --ease-out: var(--ease-out);
+  --ease-in: var(--ease-in);
+
+  /* Use enter animations as `motion-safe:animate-*`. With reduced motion every duration is 0 ms,
+     the browser fires no animationstart, and Radix Presence then waits forever for an exit. */
+  --animate-*: initial;
+  --animate-spin: spin 1s linear infinite;
+  --animate-fade-in: fade-in var(--dur-base) var(--ease-out);
+  --animate-dialog-in: dialog-in var(--dur-base) var(--ease-out);
+  --animate-sheet-in: sheet-in var(--dur-slow) var(--ease-out);
+  --animate-highlight: highlight var(--dur-highlight) var(--ease-out);
+}
+
+/* Media queries cannot read variables, so the breakpoints repeat tokens.json literally. */
+@theme {
+  --breakpoint-*: initial;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1440px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes highlight {
+  from {
+    background-color: var(--c-accentSoft);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* Skeleton fill (brandbook §12); with reduced motion it stays a flat `skel` block. */
+@utility skeleton-shimmer {
+  background-color: var(--c-skel);
+  background-image: linear-gradient(
+    90deg,
+    var(--c-skel) 0%,
+    var(--c-skel2) 50%,
+    var(--c-skel) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer var(--dur-shimmer) linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    background-image: none;
+    animation: none;
+  }
+}
+
+/* Fixed bottom bars and sheets clear the home indicator (TZ-frontend §4). */
+@utility pb-safe {
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}

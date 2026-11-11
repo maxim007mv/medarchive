@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+@import "../styles/theme.css";
+
+@layer base {
+  html {
+    background-color: var(--c-bg);
+    color: var(--c-text);
+    font-family: var(--font-sans);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-line);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* One focus style for every control: 2px accent ring, 2px offset (brandbook §5, §15). */
+  :focus-visible {
+    outline: 2px solid var(--c-focus);
+    outline-offset: 2px;
+  }
+}

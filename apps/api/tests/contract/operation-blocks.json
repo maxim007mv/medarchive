@@ -1,0 +1,22 @@
+{
+  "health.live": 1,
+  "health.ready": 2,
+  "workspaces.create": 3,
+  "session.get": 3,
+  "sessions.create": 3,
+  "sessions.delete": 3,
+  "workspace.get": 3,
+  "workspace.rotateKey": 3,
+  "documentTypes.list": 4,
+  "uploads.create": 4,
+  "documents.create": 4,
+  "documents.list": 5,
+  "documents.get": 5,
+  "documents.content": 5,
+  "documents.update": 6,
+  "documents.delete": 6,
+  "workspace.delete": 6,
+  "exports.create": 6,
+  "exports.content": 6,
+  "suggestions.create": 7
+}

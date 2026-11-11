@@ -1,0 +1,17 @@
+# OPS-04: weekly update PRs; each one goes through the same checks and security jobs.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /apps/api
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    # pnpm refuses versions younger than its minimumReleaseAge (one day).
+    cooldown: { default-days: 2 }
+  - package-ecosystem: docker
+    directories: [/apps/api, /apps/web]
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
