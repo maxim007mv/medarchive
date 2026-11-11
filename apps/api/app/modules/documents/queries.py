@@ -5,6 +5,7 @@ candidates: titles are decrypted, the substring confirmed, then counted and page
 the same sort keys as the SQL keyset (ADR-046).
 """
 
+import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime
 from uuid import UUID
@@ -42,15 +43,19 @@ async def list_documents(
             rows = await repository.list_matching(
                 db, workspace_id, list_filter, tz, order_by, after=after, limit=page_size + 1
             )
-            titles = _decrypt_titles(keys, rows)
         else:
             total = await repository.count_all(db, workspace_id)
             candidates = await repository.search_candidates(
                 db, workspace_id, list_filter, tz, keys.query_bidx(list_filter.query)
             )
-    if list_filter.query is not None:
-        titles = _decrypt_titles(keys, candidates)
-        rows, counts = _search_results(candidates, titles, list_filter, total, order_by, after)
+    # Tink AEAD is sync and CPU-bound: keep it off the event loop so 50 VU of list+search
+    # still share the loop with DB I/O (k6 p95 budget, DoD 4).
+    if list_filter.query is None:
+        titles = await asyncio.to_thread(_decrypt_titles, keys, rows)
+    else:
+        titles, rows, counts = await asyncio.to_thread(
+            _confirm_search, keys, candidates, list_filter, total, order_by, after
+        )
         rows = rows[: page_size + 1]
     page = rows[:page_size]
     next_page_token = ""
@@ -85,9 +90,24 @@ async def find_matching(
         candidates = await repository.search_candidates(
             db, session.workspace_id, list_filter, tz, keys.query_bidx(list_filter.query)
         )
-    titles = _decrypt_titles(keys, candidates)
-    rows, _ = _search_results(candidates, titles, list_filter, 0, order_by, None)
+    _, rows, _ = await asyncio.to_thread(
+        _confirm_search, keys, candidates, list_filter, 0, order_by, None
+    )
     return rows
+
+
+def _confirm_search(
+    keys: WorkspaceKeys,
+    candidates: list[ListedDocument],
+    list_filter: ListFilter,
+    total: int,
+    order_by: OrderBy,
+    after: Position | None,
+) -> tuple[dict[UUID, str], list[ListedDocument], ListCounts]:
+    """Decrypt, confirm, count and order in one thread (ADR-046)."""
+    titles = _decrypt_titles(keys, candidates)
+    rows, counts = _search_results(candidates, titles, list_filter, total, order_by, after)
+    return titles, rows, counts
 
 
 def _search_results(
