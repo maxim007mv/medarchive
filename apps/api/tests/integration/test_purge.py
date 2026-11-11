@@ -205,7 +205,7 @@ async def test_workspace_row_goes_even_if_storage_cannot_list(
     def unavailable(bucket: object, prefix: str) -> list[str]:
         raise StorageUnavailableError
 
-    monkeypatch.setattr("app.workers.purge._list_keys", unavailable)
+    monkeypatch.setattr("app.storage.s3.Bucket.list", unavailable)
 
     report = await purger.run_once()
 

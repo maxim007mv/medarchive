@@ -11,8 +11,9 @@ Entry point: `python -m app.workers.purge [--once]`.
 
 import argparse
 import asyncio
+import itertools
 import signal
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -182,8 +183,9 @@ class Purger:
             # The row may go even if listing fails: its keys are already erased, ma-docs leftovers
             # are orphans for the next pass and quarantine ones expire by the lifecycle rule.
             with _storage_failure_logged("workspace_objects", report):
-                keys = await asyncio.to_thread(_list_keys, bucket, prefix)
-                await self._delete_objects(bucket, keys, "workspace_deleted", report)
+                batches = itertools.batched((item.key for item in bucket.list(prefix)), BATCH_SIZE)
+                while keys := await asyncio.to_thread(next, batches, None):
+                    await self._delete_objects(bucket, list(keys), "workspace_deleted", report)
         async with self._sessions() as db, workspace_tx(db, workspace_id):
             await db.execute(delete(Workspace).where(Workspace.id == workspace_id))
         report.workspaces += 1
@@ -317,27 +319,21 @@ class Purger:
         The API writes the ciphertext before its transaction, so a failed transaction leaves one.
         """
         cutoff = datetime.now(UTC) - ORPHAN_MIN_AGE
-        stored = await asyncio.to_thread(_list_objects, self._storage.docs, "ws/")
-        by_workspace: dict[UUID, dict[UUID, str]] = {}
-        for item in stored:
-            ids = parse_object_key(item.key)
-            if ids is not None and item.last_modified < cutoff:
-                by_workspace.setdefault(ids[0], {})[ids[1]] = item.key
-        for workspace_id, objects in by_workspace.items():
-            for start in range(0, len(objects), BATCH_SIZE):
-                batch = dict(list(objects.items())[start : start + BATCH_SIZE])
-                async with self._sessions() as db, workspace_tx(db, workspace_id):
-                    known = set(
-                        await db.scalars(
-                            select(DocumentFile.document_id).where(
-                                DocumentFile.workspace_id == workspace_id,
-                                DocumentFile.document_id.in_(list(batch)),
-                            )
+        candidates = orphan_candidates(self._storage.docs.list("ws/"), cutoff)
+        while batch := await asyncio.to_thread(next, candidates, None):
+            workspace_id, objects = batch
+            async with self._sessions() as db, workspace_tx(db, workspace_id):
+                known = set(
+                    await db.scalars(
+                        select(DocumentFile.document_id).where(
+                            DocumentFile.workspace_id == workspace_id,
+                            DocumentFile.document_id.in_(list(objects)),
                         )
                     )
-                orphans = [key for document_id, key in batch.items() if document_id not in known]
-                await self._delete_objects(self._storage.docs, orphans, "orphan", report)
-                report.orphans += len(orphans)
+                )
+            orphans = [key for document_id, key in objects.items() if document_id not in known]
+            await self._delete_objects(self._storage.docs, orphans, "orphan", report)
+            report.orphans += len(orphans)
 
 
 @contextmanager
@@ -360,17 +356,33 @@ def parse_object_key(key: str) -> tuple[UUID, UUID] | None:
         return None
 
 
+def orphan_candidates(
+    objects: Iterable[StoredObject], cutoff: datetime
+) -> Iterator[tuple[UUID, dict[UUID, str]]]:
+    """Document objects older than `cutoff` as (workspace, {document: key}) batches of at most
+    BATCH_SIZE, read lazily: a listing is sorted by key, so a workspace's objects are adjacent.
+    """
+    batch_workspace: UUID | None = None
+    batch: dict[UUID, str] = {}
+    for item in objects:
+        ids = parse_object_key(item.key)
+        if ids is None or item.last_modified >= cutoff:
+            continue
+        workspace_id, document_id = ids
+        if batch_workspace is not None and (
+            workspace_id != batch_workspace or len(batch) == BATCH_SIZE
+        ):
+            yield batch_workspace, batch
+            batch = {}
+        batch_workspace = workspace_id
+        batch[document_id] = item.key
+    if batch_workspace is not None:
+        yield batch_workspace, batch
+
+
 def retry_delay(attempts: int) -> timedelta:
     """1, 2, 4 ... minutes, at most six hours."""
     return min(timedelta(minutes=2 ** (attempts - 1)), MAX_RETRY_DELAY)
-
-
-def _list_objects(bucket: Bucket, prefix: str) -> list[StoredObject]:
-    return list(bucket.list(prefix))
-
-
-def _list_keys(bucket: Bucket, prefix: str) -> list[str]:
-    return [stored.key for stored in bucket.list(prefix)]
 
 
 def _delete_each(bucket: Bucket, keys: list[str]) -> list[str]:
