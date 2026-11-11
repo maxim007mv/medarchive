@@ -120,10 +120,14 @@ audit-node:
 	mkdir -p $(REPORT_DIR)
 	pnpm audit --prod --audit-level high --json > $(REPORT_DIR)/pnpm-audit.json
 
+# In a git worktree `.git` is a file pointing outside the mount, so the common git dir is mounted
+# separately and only HEAD's history is scanned, not every ref of the main repository.
 gitleaks:
 	mkdir -p $(REPORT_DIR)
-	docker run --rm -v "$(CURDIR):/repo:ro" -v "$(abspath $(REPORT_DIR)):/out" $(GITLEAKS_IMAGE) \
-		git /repo --redact --no-banner --report-format json --report-path /out/gitleaks.json
+	docker run --rm -v "$(CURDIR):/repo:ro" -v "$(abspath $(REPORT_DIR)):/out" \
+		-v "$$(git rev-parse --path-format=absolute --git-common-dir):/git:ro" -e GIT_DIR=/git \
+		$(GITLEAKS_IMAGE) git /repo --log-opts "$$(git rev-parse HEAD)" \
+		--redact --no-banner --report-format json --report-path /out/gitleaks.json
 
 # Fails on HIGH or CRITICAL findings that have a fix (OPS-05: no high in the base image).
 trivy:

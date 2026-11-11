@@ -600,10 +600,14 @@ def pnpm_audit(done: subprocess.CompletedProcess[str], report: Path) -> tuple[bo
 
 
 def gitleaks(done: subprocess.CompletedProcess[str], report: Path) -> tuple[bool, str]:
+    """An unreadable git dir makes gitleaks scan 0 commits and still exit 0: that is a fail."""
     if not report.exists():
         return False, f"no report (exit {done.returncode})"
+    scanned = re.search(r"(\d+) commits scanned", done.stdout + done.stderr)
+    commits = int(scanned.group(1)) if scanned else 0
     rules = sorted({leak["RuleID"] for leak in read_json(report)})
-    return done.returncode == 0, f"findings by rule {rules} (values redacted)"
+    ok = done.returncode == 0 and commits > 0
+    return ok, f"{commits} commits scanned, findings by rule {rules} (values redacted)"
 
 
 def trivy(done: subprocess.CompletedProcess[str], report: Path) -> tuple[bool, str]:
