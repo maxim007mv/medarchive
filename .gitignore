@@ -17,7 +17,17 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.hypothesis/
 qa/fixtures/generated/
 next-env.d.ts
 *.tsbuildinfo
 .schemathesis/
+.coverage
+htmlcov/
+# Reports of `make security`, `make load` and other targets (REPORT_DIR).
+/reports/
+.idea/
+.vscode/
+*.swp
+*.pem
+*.key
