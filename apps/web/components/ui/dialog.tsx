@@ -114,8 +114,8 @@ export function Dialog({
               )}
             </div>
             {children && (
-              // Focus ring is 2 px + 2 px offset: keep it inside the scroll box on every side.
-              <div className="-mb-2 flex min-h-0 flex-col gap-4 overflow-y-auto px-5 pt-5 pb-2 md:px-7">
+              // Focus ring is 2 px + 2 px offset: keep it inside the scroll box (clips overflow).
+              <div className="-mb-2 flex min-h-0 flex-col gap-4 overflow-y-auto px-4 pt-5 pb-2 md:px-6">
                 {children}
               </div>
             )}
