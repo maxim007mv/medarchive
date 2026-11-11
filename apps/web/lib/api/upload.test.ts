@@ -126,6 +126,20 @@ describe("postToStorage", () => {
     await expect(done).rejects.toMatchObject({ name: "AbortError" });
   });
 
+  test("a finished transfer lets go of the signal, which no longer holds the request and file", async () => {
+    vi.stubGlobal("XMLHttpRequest", FakeXhr);
+    const controller = new AbortController();
+    const done = postToStorage(upload, pdf(), () => undefined, controller.signal);
+    FakeXhr.last.status = 204;
+    FakeXhr.last.onload?.();
+    await done;
+    const abort = vi.spyOn(FakeXhr.last, "abort");
+
+    controller.abort();
+
+    expect(abort).not.toHaveBeenCalled();
+  });
+
   test("a dropped connection is a NetworkError", async () => {
     vi.stubGlobal("XMLHttpRequest", FakeXhr);
     const done = postToStorage(upload, pdf(), () => undefined, new AbortController().signal);

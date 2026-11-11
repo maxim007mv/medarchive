@@ -60,9 +60,11 @@ export function postToStorage(
   const form = new FormData();
   for (const [name, value] of Object.entries(upload.fields)) form.append(name, value);
   form.append("file", file);
+  const xhr = new XMLHttpRequest();
+  const abortTransfer = () => xhr.abort();
+  signal.addEventListener("abort", abortTransfer, { once: true });
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
+  return new Promise<void>((resolve, reject) => {
     xhr.open("POST", upload.url);
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress(Math.floor((event.loaded / event.total) * 100));
@@ -73,7 +75,6 @@ export function postToStorage(
     };
     xhr.onerror = () => reject(new NetworkError());
     xhr.onabort = () => reject(new DOMException("upload aborted", "AbortError"));
-    signal.addEventListener("abort", () => xhr.abort(), { once: true });
     xhr.send(form);
-  });
+  }).finally(() => signal.removeEventListener("abort", abortTransfer));
 }
