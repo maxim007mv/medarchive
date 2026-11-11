@@ -1,0 +1,25 @@
+# Verified false positives of gitleaks generic-api-key: example access keys and idempotency keys
+# from the API contract (openapi.yaml, 06-api-contract.md) and fixed values in unit tests.
+# A new finding is not covered: fingerprints pin the commit, file and line.
+9e63a11d8c952a0490093ff670634988b858cea5:MedArchive/01_common/06-api-contract.md:generic-api-key:161
+9e63a11d8c952a0490093ff670634988b858cea5:MedArchive/01_common/06-api-contract.md:generic-api-key:171
+9e63a11d8c952a0490093ff670634988b858cea5:MedArchive/01_common/06-api-contract.md:generic-api-key:192
+9e63a11d8c952a0490093ff670634988b858cea5:MedArchive/01_common/06-api-contract.md:generic-api-key:229
+9e63a11d8c952a0490093ff670634988b858cea5:MedArchive/01_common/06-api-contract.md:generic-api-key:288
+9e63a11d8c952a0490093ff670634988b858cea5:MedArchive/01_common/openapi.yaml:generic-api-key:56
+9e63a11d8c952a0490093ff670634988b858cea5:MedArchive/01_common/openapi.yaml:generic-api-key:262
+9e63a11d8c952a0490093ff670634988b858cea5:MedArchive/01_common/openapi.yaml:generic-api-key:648
+7067d3c7b1ecc63903fd4f4c30de947936426d77:apps/api/tests/integration/test_documents_api.py:generic-api-key:66
+7067d3c7b1ecc63903fd4f4c30de947936426d77:apps/api/tests/integration/test_documents_api.py:generic-api-key:103
+43f4bfc18e02f7278502c47ea5de7b1a31b62f72:apps/api/tests/integration/test_list_api.py:generic-api-key:243
+3c9210c68ab7aa50dc2d45601caa18b210af942e:apps/api/tests/unit/test_access_key.py:generic-api-key:13
+7b8bdfaa9de7de1c998c8d28a64b07393d57887e:apps/web/components/documents/HomeScreen.test.tsx:generic-api-key:53
+365c079dafb21c9776bce61b3c8c7f377af8812d:apps/web/components/documents/HomeScreen.test.tsx:generic-api-key:96
+49b4145ebd21456a33c9442ff1287d1bf58343a4:apps/web/components/documents/HomeScreen.test.tsx:generic-api-key:145
+856de6c41921bbb005db86f28c2c0142fc50dbf8:apps/web/lib/api/queries.test.ts:generic-api-key:245
+0be609f5dcb58c6708ecc31bf2a12134e80ac7e0:apps/web/lib/api/schema.d.ts:generic-api-key:619
+0be609f5dcb58c6708ecc31bf2a12134e80ac7e0:apps/web/lib/api/schema.d.ts:generic-api-key:779
+0be609f5dcb58c6708ecc31bf2a12134e80ac7e0:apps/web/lib/api/schema.d.ts:generic-api-key:1136
+9e63a11d8c952a0490093ff670634988b858cea5:openapi.yaml:generic-api-key:56
+9e63a11d8c952a0490093ff670634988b858cea5:openapi.yaml:generic-api-key:262
+9e63a11d8c952a0490093ff670634988b858cea5:openapi.yaml:generic-api-key:648
