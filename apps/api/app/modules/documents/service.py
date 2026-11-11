@@ -6,9 +6,11 @@ a ciphertext copied into another row does not decrypt. Plaintext never reaches l
 
 import asyncio
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date
+from functools import partial
 from typing import Any
 from uuid import UUID
 
@@ -33,6 +35,12 @@ from app.modules.uploads.pdf import PdfRejectedError
 from app.modules.uploads.schemas import MAX_UPLOAD_BYTES
 from app.modules.uploads.service import original_name_aad
 from app.storage.s3 import ObjectStorage, StorageUnavailableError
+
+# A check holds the plaintext and the ciphertext in /tmp (tmpfs, so container memory) and a broken
+# PDF keeps pypdf busy for seconds under the GIL. Its own pool bounds both and leaves the default
+# executor to the storage calls of downloads.
+MAX_CONCURRENT_FILE_CHECKS = 4
+_file_checks = ThreadPoolExecutor(MAX_CONCURRENT_FILE_CHECKS, thread_name_prefix="file-check")
 
 
 def etag(version: int) -> str:
@@ -139,15 +147,16 @@ async def _store_upload(
         raise ProblemError(ErrorCode.UPLOAD_INCOMPLETE)
     if size_bytes > MAX_UPLOAD_BYTES:
         raise ProblemError(ErrorCode.FILE_TOO_LARGE)
+    check = partial(
+        store_verified_pdf,
+        storage,
+        keys,
+        quarantine_key=upload.quarantine_key,
+        object_key=repository.object_key(session.workspace_id, document_id),
+        document_id=document_id,
+    )
     try:
-        return await asyncio.to_thread(
-            store_verified_pdf,
-            storage,
-            keys,
-            quarantine_key=upload.quarantine_key,
-            object_key=repository.object_key(session.workspace_id, document_id),
-            document_id=document_id,
-        )
+        return await asyncio.get_running_loop().run_in_executor(_file_checks, check)
     except PdfRejectedError as exc:
         async with session_tx(db, session):
             await uploads.set_status(
