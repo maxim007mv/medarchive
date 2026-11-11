@@ -1,13 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import type { APIRequestContext, APIResponse } from "@playwright/test";
+import { test, type APIRequestContext, type APIResponse } from "@playwright/test";
 
 import { sources, type DocumentType, type SourceFixture } from "./manifest";
 
 /** Version of docs/policy.md the consent checkbox refers to. */
 export const POLICY_VERSION = "2026-11-10";
 export const SESSION_COOKIE = "__Host-ma_sid";
+/**
+ * Budget of a test that seeds all six PDFs, as the screen specs set it: on the shared Docker VM
+ * the seed alone takes from 5 to 25 s.
+ */
+const SEEDED_TEST_TIMEOUT_MS = 120_000;
 
 export interface DocumentInput {
   title: string;
@@ -138,6 +143,8 @@ export class ArchiveApi {
 
   /** The seed of test-strategy.md, section 3: all six PDFs in file order. */
   async addAllSources(): Promise<CreatedDocument[]> {
+    const info = test.info();
+    info.setTimeout(Math.max(info.timeout, SEEDED_TEST_TIMEOUT_MS));
     const created: CreatedDocument[] = [];
     for (const source of sources) created.push(await this.addSource(source));
     return created;
