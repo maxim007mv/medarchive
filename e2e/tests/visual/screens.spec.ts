@@ -114,7 +114,8 @@ for (const theme of ["light", "dark"] as const) {
 
       await context.setOffline(true);
       await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-      await expect(page.getByText("Нет связи с сервером.")).toBeVisible();
+      // Exact: disabled actions repeat the sentence in hidden descriptions (TC-085).
+      await expect(page.getByText("Нет связи с сервером.", { exact: true })).toBeVisible();
       await expectScreen(page, `D14-offline-${theme}`);
       await context.setOffline(false);
     });
