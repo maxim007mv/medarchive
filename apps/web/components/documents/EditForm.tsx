@@ -21,6 +21,8 @@ import { todayIso } from "./today";
 export const TITLE_MAX_CHARS = 200;
 /** The counter appears near the limit (11-design-rationale, «Ввести название»). */
 const TITLE_COUNTER_FROM = 180;
+/** `дд.мм.гггг` */
+const DATE_TEXT_LENGTH = 10;
 
 const schema = z
   .object({
@@ -166,7 +168,12 @@ export function DocumentFields({
                 ref={field.ref}
                 label={texts["upload.date.label"]}
                 value={undated ? texts["upload.date.noneValue"] : field.value}
-                onChange={field.onChange}
+                // A half-typed date is not an error yet; a whole one is checked at once (TC-119).
+                onChange={(value) => {
+                  const complete = value.length === DATE_TEXT_LENGTH;
+                  form.setValue("date", value, { shouldDirty: true, shouldValidate: complete });
+                  if (!complete) form.clearErrors("date");
+                }}
                 onBlur={field.onBlur}
                 max={todayIso()}
                 disabled={disabled || undated}

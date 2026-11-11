@@ -131,6 +131,48 @@ describe("UploadDialog (FE-12)", () => {
     expect(api.calls.some((call) => call.url.endsWith("/api/v1/documents"))).toBe(false);
   });
 
+  test("TC-119: «Такой даты нет» shows on save and for a whole wrong date, never mid-typing", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    const { user } = setup([pdfFile()]);
+    await waitFor(() => expect(FakeXhr.instances).toHaveLength(1));
+    await user.click(screen.getByRole("radio", { name: "Анализ" }));
+    const date = screen.getByLabelText("Дата документа");
+    const error = () => screen.queryByText("Такой даты нет. Проверьте день и месяц");
+
+    await user.type(date, "3102");
+    expect(error()).not.toBeInTheDocument();
+    await user.click(saveButton());
+    expect(await screen.findByText("Такой даты нет. Проверьте день и месяц")).toBeInTheDocument();
+
+    await user.clear(date);
+    expect(error()).not.toBeInTheDocument();
+    for (const digit of "3102202") {
+      await user.type(date, digit);
+      expect(error()).not.toBeInTheDocument();
+    }
+    await user.type(date, "6");
+    expect(await screen.findByText("Такой даты нет. Проверьте день и месяц")).toBeInTheDocument();
+    expect(date).toHaveAttribute("aria-invalid", "true");
+
+    await user.clear(date);
+    await user.type(date, "28022026");
+    await waitFor(() => expect(error()).not.toBeInTheDocument());
+    expect(date).not.toHaveAttribute("aria-invalid");
+  });
+
+  test("TC-119: a whole wrong date is flagged before any save", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    const { user } = setup([pdfFile()]);
+    await waitFor(() => expect(FakeXhr.instances).toHaveLength(1));
+    const date = screen.getByLabelText("Дата документа");
+
+    await user.type(date, "3102202");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await user.type(date, "6");
+
+    expect(await screen.findByText("Такой даты нет. Проверьте день и месяц")).toBeInTheDocument();
+  });
+
   test("TC-015: a PNG named .pdf is refused on the client without any request", async () => {
     const api = mockApi({});
     const png = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])], "fake.pdf", {
