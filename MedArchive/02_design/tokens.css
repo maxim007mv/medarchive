@@ -35,6 +35,7 @@
   --c-scrim: rgba(23,23,23,0.48);
   --shadow-1: 0 1px 2px rgba(23,23,23,.05), 0 0 0 1px rgba(23,23,23,.03);
   --shadow-3: 0 16px 48px rgba(23,23,23,.18), 0 2px 6px rgba(23,23,23,.08);
+  --shadow-dialog: 0 16px 48px rgba(23,23,23,.18), 0 2px 6px rgba(23,23,23,.08);
   color-scheme: light;
 }
 :root {
@@ -153,6 +154,7 @@
   --c-scrim: rgba(0,0,0,0.64);
   --shadow-1: none;
   --shadow-3: 0 16px 48px rgba(0,0,0,.6), 0 0 0 1px #2E2E32;
+  --shadow-dialog: 0 0 0 1px #2E2E32;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -192,6 +194,7 @@
   --c-scrim: rgba(0,0,0,0.64);
   --shadow-1: none;
   --shadow-3: 0 16px 48px rgba(0,0,0,.6), 0 0 0 1px #2E2E32;
+  --shadow-dialog: 0 0 0 1px #2E2E32;
   color-scheme: dark;
 }
 }

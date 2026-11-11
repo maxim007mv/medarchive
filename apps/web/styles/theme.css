@@ -51,6 +51,7 @@
   --shadow-*: initial;
   --shadow-1: var(--shadow-1);
   --shadow-3: var(--shadow-3);
+  --shadow-dialog: var(--shadow-dialog);
   --shadow-segment-indicator: var(--component-segmentIndicator);
   /* Selected radio row: accent border doubled inside (brandbook §6, D12). */
   --shadow-row-selected: inset 0 0 0 1px var(--c-accent);
@@ -100,6 +101,9 @@
   --container-dialog-form: var(--component-dialogWidthForm);
   --container-dialog-confirm: var(--component-dialogWidthConfirm);
 
+  /* One step of `p-1`, `gap-1`, `size-1`: 4 px from tokens. Tailwind's 0.25rem would follow the
+     14 px root font size and make every step 3.5 px. */
+  --spacing: var(--space-1);
   --spacing-control-sm: var(--control-heightSm);
   --spacing-control-md: var(--control-heightMd);
   --spacing-control-lg: var(--control-heightLg);
