@@ -104,7 +104,7 @@ test.describe("back to the list (TC-116, owner's decision 11.11.2026)", () => {
     );
 
     test(
-      "TC-116 export and the phone filter sheet close back to the filtered list",
+      "TC-116 export and the phone filter sheet close back to the list with focus on their opener",
       { tag: ["@b6", "@P1", "@TC-116"] },
       async ({ page }) => {
         await openFilteredList(page);
@@ -117,19 +117,25 @@ test.describe("back to the list (TC-116, owner's decision 11.11.2026)", () => {
         await exportButton.click();
         await exportDialog.getByRole("button", { name: "Закрыть" }).click();
         await expect(exportDialog).toBeHidden();
+        await expect(exportButton).toBeFocused();
 
-        await exportButton.focus();
         await exportButton.press("Enter");
         await expect(exportDialog).toBeVisible();
         await page.keyboard.press("Escape");
         await expect(exportDialog).toBeHidden();
+        await expect(exportButton).toBeFocused();
         await expectFilteredList(page);
 
         if (!isPhone(page)) return;
-        await page.getByRole("button", { name: "Фильтр", exact: true }).click();
+        const filterButton = page.getByRole("button", {
+          name: "Фильтр",
+          exact: true,
+        });
+        await filterButton.click();
         const sheet = page.getByRole("dialog", { name: "Фильтр" });
         await sheet.getByRole("button", { name: "Закрыть" }).click();
         await expect(sheet).toBeHidden();
+        await expect(filterButton).toBeFocused();
         await expectFilteredList(page);
       },
     );

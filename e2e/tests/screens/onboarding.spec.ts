@@ -2,7 +2,7 @@ import { SESSION_COOKIE } from "../../support/archive";
 import { expect, test } from "../../support/fixtures";
 import { sources } from "../../support/manifest";
 
-import { uploadDialog } from "./helpers";
+import { fillDocumentForm, SAVE_TIMEOUT_MS, uploadDialog } from "./helpers";
 
 const [bloodTest] = sources;
 
@@ -107,6 +107,60 @@ test.describe("onboarding and consent (FE-11)", () => {
       await expect(
         keyDialog.getByRole("button", { name: "Скачать как файл" }),
       ).toBeVisible();
+    },
+  );
+
+  test(
+    "TC-004 the first save hands over to the key dialog: one dialog, no toast over it, focus on the list after «Готово»",
+    { tag: ["@b3", "@P1", "@TC-004"] },
+    async ({ page }) => {
+      await page.goto("/");
+      await page.getByRole("checkbox", { name: /Я соглашаюсь/ }).click();
+      await page
+        .getByTestId("onboarding-file-input")
+        .setInputFiles(bloodTest!.path);
+      const upload = uploadDialog(page);
+      await fillDocumentForm(upload, bloodTest!);
+      await upload.getByRole("button", { name: "Сохранить в архив" }).click();
+
+      const keyDialog = page.getByRole("dialog", {
+        name: "Ключ доступа к архиву",
+      });
+      await expect(keyDialog).toBeVisible({ timeout: SAVE_TIMEOUT_MS });
+      await expect(page.getByRole("dialog")).toHaveCount(1);
+      const copy = keyDialog.getByRole("button", { name: "Скопировать" });
+      await expect(copy).toBeFocused();
+      // Its focus ring (2 px plus 2 px offset) must fit inside every box that clips it.
+      const ringClipped = await copy.evaluate((button) => {
+        const ring = button.getBoundingClientRect();
+        for (let box = button.parentElement; box; box = box.parentElement) {
+          if (getComputedStyle(box).overflow !== "visible") {
+            const clip = box.getBoundingClientRect();
+            if (
+              ring.top - 4 < clip.top ||
+              ring.bottom + 4 > clip.bottom ||
+              ring.left - 4 < clip.left ||
+              ring.right + 4 > clip.right
+            )
+              return true;
+          }
+          if (box.getAttribute("role") === "dialog") return false;
+        }
+        return false;
+      });
+      expect(ringClipped).toBe(false);
+      const added = page.getByText(
+        `Документ «${bloodTest!.title}» добавлен`,
+        { exact: true },
+      );
+      await expect(added).toBeHidden();
+
+      await keyDialog.getByRole("button", { name: "Готово" }).click();
+
+      await expect(added).toBeVisible();
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Документы" }),
+      ).toBeFocused();
     },
   );
 

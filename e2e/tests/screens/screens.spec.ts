@@ -10,9 +10,11 @@ import {
   openUpload,
   row,
   rows,
+  SAVE_TIMEOUT_MS,
   saveScreen,
   search,
   setPeriod,
+  uploadDialog,
 } from "./helpers";
 
 // Not a gate: pictures for side-by-side review with MedArchive/02_design/screens (e2e/artifacts/screens).
@@ -41,6 +43,24 @@ for (const theme of ["light", "dark"] as const) {
         }),
       ).toBeVisible();
       await saveScreen(page, testInfo, `D01-onboarding-${theme}`);
+    });
+
+    test(`access key after the first save, ${theme}`, async ({ page, browserName }, testInfo) => {
+      await page.goto("/");
+      await page.getByRole("checkbox", { name: /Я соглашаюсь/ }).click();
+      await page.getByTestId("onboarding-file-input").setInputFiles(bloodTest!.path);
+      const upload = uploadDialog(page);
+      await fillDocumentForm(upload, bloodTest!);
+      await upload.getByRole("button", { name: "Сохранить в архив" }).click();
+      const keyDialog = page.getByRole("dialog", { name: "Ключ доступа к архиву" });
+      await expect(keyDialog).toBeVisible({ timeout: SAVE_TIMEOUT_MS });
+      // Back and forth with the keyboard, so the focus ring of «Скопировать» is drawn.
+      // WebKit moves focus to buttons only with Option+Tab.
+      const tab = browserName === "webkit" ? "Alt+Tab" : "Tab";
+      await page.keyboard.press(tab);
+      await page.keyboard.press(`Shift+${tab}`);
+      await expect(keyDialog.getByRole("button", { name: "Скопировать" })).toBeFocused();
+      await saveScreen(page, testInfo, `key-dialog-${theme}`);
     });
 
     test(`D02..D04 upload form, ${theme}`, async ({
@@ -172,15 +192,20 @@ for (const theme of ["light", "dark"] as const) {
     }, testInfo) => {
       expect(freshArchive.accessKey).toBeTruthy();
       await page.goto("/settings");
+      // Shown once the session answers, which says where «назад» leads.
+      const back = page.getByRole("link", { name: "К документам" });
       await expect(
         page.getByRole("heading", { name: "Хранение и доступ" }),
       ).toBeVisible();
+      await expect(back).toBeVisible();
       await saveScreen(page, testInfo, `settings-${theme}`);
 
       await page.goto("/policy");
+      await expect(back).toBeVisible();
       await saveScreen(page, testInfo, `policy-${theme}`);
 
       await page.goto("/restore");
+      await expect(back).toBeVisible();
       await saveScreen(page, testInfo, `restore-${theme}`);
     });
 
