@@ -1,0 +1,27 @@
+# Schemathesis defaults plus the answers openapi.yaml documents for requests it cannot make valid.
+
+# 413 file_too_large: size_bytes above the 20 МБ maximum (POST /api/v1/uploads, TC-016).
+[checks.negative_data_rejection]
+expected-statuses = ["400", "401", "403", "404", "405", "406", "409", "413", "415", "422", "428", "429", "5xx"]
+
+# 428 precondition_required: a write without If-Match (TC-058).
+[checks.missing_required_header]
+expected-statuses = ["400", "401", "403", "406", "415", "422", "428"]
+
+# 412 version_conflict: a generated If-Match is not the current ETag (TC-059).
+[checks.positive_data_acceptance]
+expected-statuses = ["2xx", "3xx", "401", "403", "404", "409", "412", "429", "5xx"]
+
+# An export with no documents in scope is 422 «Нет документов для экспорта» (06-api-contract.md).
+[[operations]]
+include-operation-id = "exports.create"
+
+[operations.checks.positive_data_acceptance]
+expected-statuses = ["2xx", "3xx", "401", "403", "404", "409", "412", "422", "429", "5xx"]
+
+# The AI suggestion is turned off: 503 ai_unavailable (ADR-042).
+[[operations]]
+include-operation-id = "suggestions.create"
+
+[operations.checks.not_a_server_error]
+expected-statuses = ["2xx", "3xx", "4xx", "503"]

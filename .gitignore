@@ -20,3 +20,4 @@ __pycache__/
 qa/fixtures/generated/
 next-env.d.ts
 *.tsbuildinfo
+.schemathesis/
