@@ -2,7 +2,7 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 
 import { texts } from "@/lib/texts";
 
@@ -20,10 +20,24 @@ export type DialogProps = {
   width?: "form" | "confirm";
   /** Focused on open instead of the cross, e.g. «Отмена» in a delete confirmation. */
   initialFocus?: RefObject<HTMLElement | null>;
+  /** Focused on close when the element to return to has left the page. */
+  finalFocus?: RefObject<HTMLElement | null>;
+  /**
+   * Opens in the same render in which another dialog closes. The scrim is already on screen, so
+   * it does not fade in again, and focus later returns to where the closed dialog would return it.
+   */
+  handOff?: boolean;
   /** Buttons: «Отмена» first, the action last. Desktop puts them right, the sheet stacks them. */
   footer?: ReactNode;
   children?: ReactNode;
 };
+
+/** Return target of the dialog that closed last, for a `handOff` dialog opening after it. */
+let closedDialogReturnTo: Element | null = null;
+
+function isFocusable(element: Element | null | undefined): element is HTMLElement {
+  return element instanceof HTMLElement && element !== document.body && element.isConnected;
+}
 
 /**
  * Modal from 768 px, bottom sheet below (FE-06). Radix traps focus, closes on Esc and returns
@@ -36,31 +50,52 @@ export function Dialog({
   description,
   width = "form",
   initialFocus,
+  finalFocus,
+  handOff = false,
   footer,
   children,
 }: DialogProps) {
   // Radix returns focus only to a Dialog.Trigger; our dialogs open from any button or menu.
   const returnFocusTo = useRef<Element | null>(null);
 
+  // React runs this cleanup before the effects of a dialog mounted in the same commit, so its
+  // onOpenAutoFocus already sees the target.
+  useEffect(() => {
+    if (!open) return;
+    return () => {
+      closedDialogReturnTo = returnFocusTo.current;
+    };
+  }, [open]);
+
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="bg-scrim motion-safe:animate-fade-in fixed inset-0 z-40 flex items-end justify-center pt-12 md:items-center md:p-8">
+        <RadixDialog.Overlay
+          className={cn(
+            "bg-scrim fixed inset-0 z-40 flex items-end justify-center pt-12 md:items-center md:p-8",
+            !handOff && "motion-safe:animate-fade-in",
+          )}
+        >
           <RadixDialog.Content
             // Without a description Radix would point aria-describedby at a missing element.
             {...(description ? {} : { "aria-describedby": undefined })}
             onOpenAutoFocus={(event) => {
-              returnFocusTo.current = document.activeElement;
+              returnFocusTo.current = handOff ? closedDialogReturnTo : document.activeElement;
               if (!initialFocus?.current) return;
               event.preventDefault();
               initialFocus.current.focus();
             }}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
-              if (returnFocusTo.current instanceof HTMLElement) returnFocusTo.current.focus();
+              // Radix calls this a task after unmount; a dialog that took over has focused itself by then.
+              if (document.activeElement?.closest('[role="dialog"]')) return;
+              const target = isFocusable(returnFocusTo.current)
+                ? returnFocusTo.current
+                : finalFocus?.current;
+              target?.focus();
             }}
             className={cn(
-              "bg-raised pb-safe motion-safe:animate-sheet-in text-text shadow-3 relative flex max-h-full w-full flex-col rounded-t-2xl",
+              "bg-raised pb-safe motion-safe:animate-sheet-in text-text shadow-dialog relative flex max-h-full w-full flex-col rounded-t-2xl",
               "md:motion-safe:animate-dialog-in md:rounded-2xl md:pb-6",
               width === "form" ? "md:max-w-dialog-form" : "md:max-w-dialog-confirm",
             )}
@@ -78,7 +113,9 @@ export function Dialog({
               )}
             </div>
             {children && (
-              <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-4 pt-5 md:px-6">
+              // pb-1 keeps the focus ring (2 px + 2 px offset) of the last control inside the
+              // scroll box, which clips it; -mb-1 gives the space back to what follows.
+              <div className="-mb-1 flex min-h-0 flex-col gap-4 overflow-y-auto px-4 pt-5 pb-1 md:px-6">
                 {children}
               </div>
             )}

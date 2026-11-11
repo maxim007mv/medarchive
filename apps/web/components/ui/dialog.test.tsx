@@ -98,3 +98,76 @@ test("FE-06: a form dialog starts on its first field, not on the cross", async (
 
   expect(await screen.findByRole("textbox", { name: texts["upload.name.label"] })).toHaveFocus();
 });
+
+function HandOff({ withOpener = true }: { withOpener?: boolean }) {
+  const [step, setStep] = useState<"none" | "first" | "second">("none");
+  const [showOpener, setShowOpener] = useState(true);
+  const fallbackRef = useRef<HTMLHeadingElement>(null);
+  return (
+    <>
+      <h1 ref={fallbackRef} tabIndex={-1}>
+        {texts["list.title"]}
+      </h1>
+      {showOpener && <Button onClick={() => setStep("first")}>{texts["header.add"]}</Button>}
+      <Dialog
+        open={step === "first"}
+        onOpenChange={() => setStep("none")}
+        title={texts["upload.title"]}
+        footer={
+          <Button
+            onClick={() => {
+              setStep("second");
+              if (!withOpener) setShowOpener(false);
+            }}
+          >
+            {texts["upload.save"]}
+          </Button>
+        }
+      />
+      <Dialog
+        open={step === "second"}
+        onOpenChange={() => setStep("none")}
+        handOff
+        finalFocus={fallbackRef}
+        title={texts["accessKey.title"]}
+        footer={<Button onClick={() => setStep("none")}>{texts["accessKey.done"]}</Button>}
+      />
+    </>
+  );
+}
+
+const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("FE-06: a hand-off dialog replaces the closing one under a still scrim and keeps focus", async () => {
+  render(<HandOff />);
+  const opener = screen.getByRole("button", { name: texts["header.add"] });
+  await userEvent.click(opener);
+  expect(screen.getByRole("dialog").parentElement?.className).toContain("animate-fade-in");
+
+  await userEvent.click(screen.getByRole("button", { name: texts["upload.save"] }));
+  await nextTask();
+
+  const dialogs = screen.getAllByRole("dialog");
+  expect(dialogs).toHaveLength(1);
+  expect(dialogs[0]).toHaveAccessibleName(texts["accessKey.title"]);
+  expect(dialogs[0]?.parentElement?.className).not.toContain("animate-fade-in");
+  expect(screen.getByRole("button", { name: texts["accessKey.done"] })).toHaveFocus();
+
+  await userEvent.click(screen.getByRole("button", { name: texts["accessKey.done"] }));
+  await nextTask();
+
+  expect(opener).toHaveFocus();
+});
+
+test("FE-06: when the opener is gone, focus goes to finalFocus instead of the page body", async () => {
+  render(<HandOff withOpener={false} />);
+  await userEvent.click(screen.getByRole("button", { name: texts["header.add"] }));
+  await userEvent.click(screen.getByRole("button", { name: texts["upload.save"] }));
+  await nextTask();
+  expect(screen.queryByRole("button", { name: texts["header.add"] })).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: texts["accessKey.done"] }));
+  await nextTask();
+
+  expect(screen.getByRole("heading", { name: texts["list.title"] })).toHaveFocus();
+});
