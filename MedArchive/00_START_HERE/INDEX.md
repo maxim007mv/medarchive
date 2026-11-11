@@ -93,7 +93,7 @@
 | `05_qa/fixtures/04-therapist-summary.pdf` | PDF-фикстура из задания | 76 КБ |
 | `05_qa/fixtures/05-ultrasound-summary.pdf` | PDF-фикстура из задания | 76 КБ |
 | `05_qa/fixtures/06-ecg-summary-undated.pdf` | PDF-фикстура из задания | 75 КБ |
-| `05_qa/test-cases.md` | 78 тест-кейсов | 17 КБ |
+| `05_qa/test-cases.md` | 82 тест-кейса | 20 КБ |
 | `05_qa/test-strategy.md` | Стратегия тестирования | 6 КБ |
 | `06_ai_agents/AGENTS.md` | Правила агентов | 3 КБ |
 | `06_ai_agents/prompts.md` | Стартовые промпты | 2 КБ |
