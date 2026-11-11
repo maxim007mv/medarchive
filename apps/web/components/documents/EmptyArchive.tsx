@@ -119,7 +119,8 @@ export function EmptyArchive({ needsConsent, onFiles, busy, error, disabledReaso
         onDrop={drop}
         className={cn(
           "duration-fast flex flex-col gap-4 transition-colors",
-          "md:items-center md:justify-center md:self-start md:rounded-2xl md:border md:border-dashed md:p-8 md:text-center",
+          // Two columns (D01): the drop zone runs as tall as the text beside it, content centred.
+          "md:items-center md:justify-center md:self-start md:rounded-2xl md:border md:border-dashed md:p-8 md:text-center lg:self-stretch",
           dragOver ? "md:border-accent md:bg-accent-soft" : "md:border-control md:bg-surface",
         )}
       >
