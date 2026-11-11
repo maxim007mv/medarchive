@@ -1383,7 +1383,7 @@ E2E-тесты блоков после 7 (pending, не запускались):
 
 E2E-тесты блоков после 7 (pending, не запускались): 36.
 
-Итог: FAIL только на ZAP baseline (docker Error 137 / OOM, отчёт zap.json не появился). Остальное pass: e2e 624/0, k6 list/search p95 123 и 130 мс, schemathesis, Trivy app и bases 0 HIGH/CRITICAL, TC-115 pass. Повтор после освобождения RAM.
+Итог: FAIL только на ZAP baseline. Контейнер `crazy_hamilton` ~32 мин был unhealthy: Java 100% CPU на `-addonupdate -addoninstall pscanrulesBeta`, отчёта не было; контейнер снят (`docker kill`, exit 137). Сразу после этого `make zap` на том же `REPORT_DIR` завершился за ~1,5 мин: High [], Medium [], Low 5 (COEP/COOP/CORP, Permissions-Policy, X-Content-Type-Options) — критерий «без High» выполнен. Остальное в прогоне pass: e2e 624/0 (TC-115 зелёный), k6 list/search p95 123 и 130 мс, schemathesis, Trivy app и bases 0 HIGH/CRITICAL. Полный повтор — гейт 9.
 
 ### Дефекты
 
