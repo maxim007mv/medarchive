@@ -349,6 +349,91 @@ E2E-тесты блоков после 4 (pending, не запускались):
 
 ## Блок 5
 
+#### Прогон 11.11.2026 02:53 MSK, `84c2739`: FAIL
+
+Коммит `84c2739` «test(FE-13): light and dark screenshots of every screen, desktop and phone». Стек `medarchive_qa` (браузер `https://localhost:3444`, api :8900), логи `/tmp/medarchive-gate-logs/20261111-0118-84c2739-b5`. Команда `tools/verify_block.sh 5`.
+
+| Шаг | Блокирует | Итог | Подробности | с |
+|---|---|---|---|---|
+| deps: pnpm install | да | pass | exit 0; лог `01-deps-pnpm-install.log` | 0 |
+| deps: uv sync | да | pass | exit 0; лог `02-deps-uv-sync.log` | 0 |
+| make fixtures | да | pass | exit 0; лог `03-make-fixtures.log` | 0 |
+| playwright browsers | да | pass | exit 0; лог `04-playwright-browsers.log` | 1 |
+| make lint | да | pass | exit 0; лог `05-make-lint.log` | 4 |
+| make typecheck | да | pass | exit 0; лог `06-make-typecheck.log` | 11 |
+| make test-api (pytest) | да | pass | 618 passed, 0 failed, 0 skipped (exit 0); лог `07-make-test-api-pytest.log` | 115 |
+| make test-web (vitest) | да | pass | 249 passed, 0 failed, 0 skipped (exit 0); лог `08-make-test-web-vitest.log` | 7 |
+| web build | да | pass | exit 0; лог `09-web-build.log` | 22 |
+| compose up, all services healthy | да | pass | exit 0; api healthy, db healthy, migrate exited(0), minio healthy, minio-init exited(0), redis healthy, tls healthy, web healthy, worker healthy; лог `10-compose-up-all-services-healthy.log` | 83 |
+| UI unit tests (FE-03..FE-09) | да | pass | 100 passed, 0 failed, 0 skipped (components/) | 0 |
+| error catalog contract (BE-03) | да | pass | 3 passed, 0 failed, 0 skipped (catalog) | 0 |
+| migrations up/down on PostgreSQL 17 | да | pass | PostgreSQL 17: upgrade head, downgrade base, upgrade head passed; лог `13-migrations-up-down-on-postgresql-17.log` | 5 |
+| migrations up/down on PostgreSQL 18 | да | pass | PostgreSQL 18: upgrade head, downgrade base, upgrade head passed; лог `14-migrations-up-down-on-postgresql-18.log` | 4 |
+| hardening (OPS-05, OPS-07) | нет | pass | medarchive/api:qa user=api healthcheck=yes; medarchive/web:qa user=node healthcheck=yes; api read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; web read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; migrate read_only=true cap_drop=[ALL] security_opt=[no-new-privileges:true]; api uid=10001; web uid=1000; api role=ma_app migrate role=ma_owner; app tables not owned | 1 |
+| api with RATE_LIMITS_ENABLED=false | да | pass | exit 0; лог `16-api-with-rate-limits-enabled-false.log` | 13 |
+| e2e @b[1-5]\b, limits off | да | fail | 107 passed, 3 failed, 0 skipped (exit 1); лог `17-e2e-b-1-5-b-limits-off.log` | 81 |
+| api with RATE_LIMITS_ENABLED=true | да | pass | exit 0; лог `18-api-with-rate-limits-enabled-true.log` | 15 |
+| schemathesis --checks all | нет | fail | 12 passed, 2 failed, 0 skipped (exit 1); лог `19-schemathesis-checks-all.log` | 5 |
+| schemathesis --checks all, session-ending | нет | pass | 1 passed, 0 failed, 0 skipped (exit 0); лог `20-schemathesis-checks-all-session-ending.log` | 1 |
+| PII scan: logs and DB dump (TC-096) | нет | pass | 19 markers; in logs 0, in DB plaintext 0, dump 2067258 bytes | 0 |
+| ZAP baseline, no High | нет | pass | High []; Medium []; Low ['Cross-Origin-Resource-Policy Header Missing or Invalid', 'Permissions Policy Header Not Set', 'X-Content-Type-Options Header Missing']; лог `22-zap-baseline-no-high.log` | 49 |
+| pip-audit (OPS-04) | нет | pass | 52 packages, vulnerabilities []; лог `23-pip-audit-ops-04.log` | 4 |
+| pnpm audit --prod (OPS-04) | нет | pass | info 0, low 0, moderate 0, high 0, critical 0; лог `24-pnpm-audit-prod-ops-04.log` | 12 |
+| gitleaks, git history (OPS-04) | нет | pass | findings by rule [] (values redacted); лог `25-gitleaks-git-history-ops-04.log` | 1 |
+| trivy medarchive/api:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `26-trivy-medarchive-api-qa-ops-04-ops-05.log` | 9 |
+| trivy medarchive/web:qa (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `27-trivy-medarchive-web-qa-ops-04-ops-05.log` | 4 |
+| trivy python:3.12-slim-bookworm (OPS-04, OPS-05) | нет | pass | fixable CRITICAL 0 [], HIGH 0 []; лог `28-trivy-python-3-12-slim-bookworm-ops-04-ops-05.log` | 0 |
+| trivy node:22-alpine (OPS-04, OPS-05) | нет | fail | fixable CRITICAL 0 [], HIGH 9 ['CVE-2026-102276', 'CVE-2026-102278', 'CVE-2026-13149', 'CVE-2026-14257', 'CVE-2026-33671']; лог `29-trivy-node-22-alpine-ops-04-ops-05.log` | 0 |
+
+| TC | Итог | Тесты |
+|---|---|---|
+| TC-001 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-002 | pass | e2e:api passed, e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-003 | pass | e2e:api passed, pytest passed |
+| TC-004 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-010 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-011 | fail | e2e:chromium-desktop passed, e2e:webkit-iphone13 failed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-012 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-013 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-014 | fail | e2e:chromium-desktop failed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-015 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-016 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-017 | pass | pytest passed |
+| TC-018 | pass | pytest passed |
+| TC-019 | pass | e2e:api passed, e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-020 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-021 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-022 | pass | e2e:api passed, pytest passed |
+| TC-023 | pass | e2e:api passed, pytest passed |
+| TC-024 | pass | e2e:api passed, pytest passed |
+| TC-030 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-031 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-032 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-033 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-034 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-035 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-036 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-037 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-038 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-039 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed, vitest passed |
+| TC-040 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, vitest passed |
+| TC-041 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-042 | pass | e2e:api passed, pytest passed |
+| TC-043 | pass | e2e:api passed, pytest passed |
+| TC-044 | pass | pytest passed |
+| TC-044b | pass | vitest passed |
+| TC-050 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-057 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed, pytest passed |
+| TC-085 | pass | e2e:chromium-desktop passed, e2e:webkit-iphone13 passed |
+| TC-090 | pass | e2e:api passed, pytest passed |
+| TC-091 | pass | pytest passed |
+| TC-092 | pass | pytest passed |
+| TC-093 | pass | e2e:api passed, pytest passed, vitest passed |
+
+E2E-тесты блоков после 5 (pending, не запускались): 115.
+
+Итог: FAIL. E2E 107 из 110: таймауты TC-011 (WebKit, 120 с), TC-014 (Chromium, beforeEach 120 с) и a11y D08 (WebKit, beforeEach 30 с), все на этапе сида архива, под нехваткой памяти Docker VM (D-011); повтор нужен после очистки утёкших контейнеров. D-014 по этому прогону исправлен: остальные тесты загрузки на WebKit зелёные. Два ST202 schemathesis (`idempotency_key_reused` на `uploads.create` и `documents.create`) вызвал хук гейта; исправление `7d2e811` в этот коммит не вошло. ZAP baseline: High 0, Medium 0, Low 3 (`Cross-Origin-Resource-Policy`, `Permissions-Policy`, `X-Content-Type-Options` на части ответов). Проверка ПДн: 0 из 19 маркеров в логах и дампе 2 МБ.
+
 ### Дефекты
 
 Нет.
