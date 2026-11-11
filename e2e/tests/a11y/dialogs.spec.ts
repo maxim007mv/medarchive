@@ -15,6 +15,8 @@ const dialogs: { name: string; open: (page: Page) => Promise<void> }[] = [
     open: async (page) => {
       if (!therapist) throw new Error("manifest has no «Заключение терапевта»");
       await row(page, therapist.title).getByRole("link", { name: therapist.title }).click();
+      // The list's row menus are also «Ещё» until the document page replaces it.
+      await expect(page.getByRole("textbox", { name: "Заметка" })).toBeVisible();
       if (isPhone(page)) {
         await page.getByRole("button", { name: "Ещё" }).click();
         await page.getByRole("menuitem", { name: "Удалить" }).click();
