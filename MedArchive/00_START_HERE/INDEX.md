@@ -17,7 +17,7 @@
 | `01_common/07-data-model.sql` | DDL PostgreSQL | 22 КБ |
 | `01_common/07-database.md` | БД: ERD, индексы, планы, RLS, шифрование, бэкапы | 28 КБ |
 | `01_common/08-security-privacy.md` | Модель угроз STRIDE, ASVS, API Top 10, 152-ФЗ | 13 КБ |
-| `01_common/09-decisions-ADR.md` | 50 архитектурных решений | 62 КБ |
+| `01_common/09-decisions-ADR.md` | 50 архитектурных решений | 63 КБ |
 | `01_common/10-patterns.md` | Каталог паттернов бэкенда и фронтенда | 7 КБ |
 | `01_common/11-design-rationale.md` | Обоснование экранов и действий | 12 КБ |
 | `01_common/12-telegram-summary.md` | Короткая сводка для Telegram | 1 КБ |
