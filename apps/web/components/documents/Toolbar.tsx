@@ -1,7 +1,7 @@
 "use client";
 
 import { SlidersHorizontal } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -41,6 +41,7 @@ const typesOf = (choice: TypeChoice): DocumentType[] => (choice === "all" ? [] :
 /** Search, period and type above the list: one row from 1024 px (D06), search + sheet below (M04). */
 export function Toolbar({ filters, setFilters }: Pick<ListFilters, "filters" | "setFilters">) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const filterOpenerRef = useRef<HTMLElement | null>(null);
   const commitQuery = useCallback((q: string) => void setFilters({ q }), [setFilters]);
 
   return (
@@ -68,13 +69,17 @@ export function Toolbar({ filters, setFilters }: Pick<ListFilters, "filters" | "
           icon={SlidersHorizontal}
           variant="outline"
           aria-label={texts["filter.sheet.title"]}
-          onClick={() => setSheetOpen(true)}
+          onClick={(event) => {
+            filterOpenerRef.current = event.currentTarget;
+            setSheetOpen(true);
+          }}
           className="lg:hidden"
         />
       </div>
       {sheetOpen && (
         <FilterSheet
           filters={filters}
+          finalFocus={filterOpenerRef}
           onApply={(next) => {
             void setFilters(next);
             setSheetOpen(false);
@@ -89,10 +94,12 @@ export function Toolbar({ filters, setFilters }: Pick<ListFilters, "filters" | "
 /** M04: changes stay a draft until «Показать N»; N comes live from `page_size=1`. */
 function FilterSheet({
   filters,
+  finalFocus,
   onApply,
   onClose,
 }: {
   filters: DocumentFilters;
+  finalFocus?: RefObject<HTMLElement | null>;
   onApply: (next: Partial<DocumentFilters>) => void;
   onClose: () => void;
 }) {
@@ -113,6 +120,7 @@ function FilterSheet({
       open
       onOpenChange={(open) => !open && onClose()}
       title={texts["filter.sheet.title"]}
+      finalFocus={finalFocus}
       footer={
         <>
           <Button variant="secondary" onClick={() => setDraft({ ...draft, ...reset })}>

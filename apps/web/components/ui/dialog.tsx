@@ -64,7 +64,13 @@ export function Dialog({
   // upload) never flips `open` to false, so Radix skips onCloseAutoFocus — restore here.
   useLayoutEffect(() => {
     if (!open) return;
-    returnFocusTo.current = handOff ? closedDialogReturnTo : document.activeElement;
+    // Dynamic imports mount after the click, so activeElement may already be the page body —
+    // fall back to finalFocus captured by the opener's onClick.
+    returnFocusTo.current = handOff
+      ? closedDialogReturnTo
+      : isFocusable(document.activeElement)
+        ? document.activeElement
+        : (finalFocus?.current ?? null);
     return () => {
       closedDialogReturnTo = returnFocusTo.current;
       const target = returnFocusTo.current;

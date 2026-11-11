@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, Download } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type RefObject } from "react";
 
 import { Alert } from "@/components/ui/alert";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -26,6 +26,8 @@ type Props = {
   total: number;
   matched: number;
   selectedIds: string[];
+  /** The «Экспорт» that opened this dialog; Dialog mounts after a dynamic import. */
+  finalFocus?: RefObject<HTMLElement | null>;
   onClose: () => void;
 };
 
@@ -33,7 +35,15 @@ type Props = {
  * D12 / M08. Each choice asks `POST /api/v1/exports` for its composition, so the button shows the
  * real size from `total_bytes`; the ZIP itself streams from `content_url`.
  */
-export function ExportDialog({ filters, filtered, total, matched, selectedIds, onClose }: Props) {
+export function ExportDialog({
+  filters,
+  filtered,
+  total,
+  matched,
+  selectedIds,
+  finalFocus,
+  onClose,
+}: Props) {
   const [scope, setScope] = useState<ExportScope>(defaultExportScope(filtered));
   const createExport = useCreateExport();
   const { mutate, reset } = createExport;
@@ -63,6 +73,7 @@ export function ExportDialog({ filters, filtered, total, matched, selectedIds, o
       open
       onOpenChange={(open) => !open && onClose()}
       title={texts["export.title"]}
+      finalFocus={finalFocus}
       footer={
         <>
           <Button variant="tertiary" onClick={onClose}>

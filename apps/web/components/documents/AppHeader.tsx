@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { texts } from "@/lib/texts";
 
 type Actions = {
-  onExport: () => void;
+  onExport: (opener: HTMLElement) => void;
   onAdd: () => void;
   /** Why «Экспорт» is unavailable: empty archive or no connection. */
   exportDisabledReason?: string;
@@ -63,7 +63,7 @@ export function AppHeader({
                     aria-label={texts["header.export"]}
                     disabled={Boolean(actions.exportDisabledReason)}
                     disabledReason={actions.exportDisabledReason}
-                    onClick={actions.onExport}
+                    onClick={(event) => actions.onExport(event.currentTarget)}
                   />
                 </span>
                 <span className="hidden items-center gap-2 md:flex">
@@ -72,7 +72,7 @@ export function AppHeader({
                     icon={Download}
                     disabled={Boolean(actions.exportDisabledReason)}
                     disabledReason={actions.exportDisabledReason}
-                    onClick={actions.onExport}
+                    onClick={(event) => actions.onExport(event.currentTarget)}
                   >
                     {texts["header.export"]}
                   </Button>

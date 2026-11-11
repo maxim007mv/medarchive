@@ -196,3 +196,42 @@ test("FE-06: unmounting on close still returns focus to the opener", async () =>
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(opener).toHaveFocus();
 });
+
+test("FE-06: finalFocus is used when the dialog mounts after the opener lost focus", async () => {
+  function LateMount() {
+    const [open, setOpen] = useState(false);
+    const openerRef = useRef<HTMLButtonElement>(null);
+    return (
+      <>
+        <Button
+          ref={openerRef}
+          onClick={() => {
+            // Mimic a dynamic import: focus has left the opener before Dialog mounts.
+            document.body.focus();
+            setOpen(true);
+          }}
+        >
+          {texts["header.export"]}
+        </Button>
+        {open && (
+          <Dialog
+            open
+            finalFocus={openerRef}
+            onOpenChange={(next) => !next && setOpen(false)}
+            title={texts["export.title"]}
+          >
+            <Button onClick={() => setOpen(false)}>{texts["common.cancel"]}</Button>
+          </Dialog>
+        )}
+      </>
+    );
+  }
+
+  render(<LateMount />);
+  const opener = screen.getByRole("button", { name: texts["header.export"] });
+  await userEvent.click(opener);
+  await userEvent.click(screen.getByRole("button", { name: texts["common.cancel"] }));
+  await nextTask();
+
+  expect(opener).toHaveFocus();
+});

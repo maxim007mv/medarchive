@@ -78,6 +78,8 @@ export function ArchiveScreen({
   );
   const [keyToShow, setKeyToShow] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  // ExportDialog is a dynamic chunk: by the time it mounts, activeElement is no longer «Экспорт».
+  const exportOpenerRef = useRef<HTMLElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     item: DocumentItem;
     opener: HTMLElement | null;
@@ -170,7 +172,10 @@ export function ArchiveScreen({
       <AppHeader
         showSettings
         actions={{
-          onExport: () => setExportOpen(true),
+          onExport: (opener) => {
+            exportOpenerRef.current = opener;
+            setExportOpen(true);
+          },
           onAdd: () => setUploadFiles([]),
           exportDisabledReason,
           addDisabledReason: offlineReason,
@@ -273,6 +278,7 @@ export function ArchiveScreen({
           total={total}
           matched={matched}
           selectedIds={selectedIds}
+          finalFocus={exportOpenerRef}
           onClose={() => setExportOpen(false)}
         />
       )}
