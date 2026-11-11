@@ -329,6 +329,37 @@ async def test_patch_changes_fields_and_reindexes_title(api: Api) -> None:
     assert card.json() == body
 
 
+async def test_tc099_audit_of_patch_names_fields_without_values(
+    api: Api, superuser_engine: AsyncEngine
+) -> None:
+    old_note, new_title, new_note = "Натощак", "Липидограмма", "Повторить через месяц"
+    async with api.client() as client:
+        created, document = await _with_document(client)
+        url = f"/api/v1/documents/{document['id']}"
+        noted = await client.patch(
+            url, headers={**write_headers(created), "If-Match": '"v1"'}, json={"note": old_note}
+        )
+        patched = await client.patch(
+            url,
+            headers={**write_headers(created), "If-Match": '"v2"'},
+            json={"title": new_title, "note": new_note},
+        )
+    async with superuser_engine.connect() as connection:
+        row = (
+            await connection.execute(
+                text("SELECT * FROM app.audit_log WHERE entity_id = :id ORDER BY id DESC LIMIT 1"),
+                {"id": document["id"]},
+            )
+        ).one()
+
+    assert (noted.status_code, patched.status_code) == (200, 200)
+    assert row.action == "document.update"
+    assert row.changed_fields == ["title", "note"]
+    values = [str(value) for value in row]
+    for secret in (GENERAL_BLOOD_TEST.title, old_note, new_title, new_note):
+        assert not any(secret in value for value in values)
+
+
 async def test_delete_is_soft_and_repeat_is_404(api: Api) -> None:
     async with api.client() as client:
         created, document = await _with_document(client)
