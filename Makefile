@@ -138,11 +138,12 @@ trivy:
 		-o /out/trivy-$(subst /,-,$(subst :,-,$(IMAGE))).json $(IMAGE)
 
 # ZAP baseline (passive) on the compose network; ZAP_COOKIE carries a session of a fresh archive.
+# -silent: no marketplace addonupdate (that hung ~32m / OOM on the gate VM in block 7).
 zap:
 	mkdir -p $(REPORT_DIR) && chmod 777 $(REPORT_DIR)
 	docker run --rm --network $(COMPOSE_PROJECT)_default -v "$(abspath $(REPORT_DIR)):/zap/wrk:rw" \
 		$(ZAP_IMAGE) zap-baseline.py -t http://web:3000/ -J zap.json -r zap.html -I \
-		-z "-config replacer.full_list(0).description=session -config replacer.full_list(0).enabled=true \
+		-z "-silent -config replacer.full_list(0).description=session -config replacer.full_list(0).enabled=true \
 		-config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstr=Cookie \
 		-config replacer.full_list(0).regex=false -config replacer.full_list(0).replacement=$(ZAP_COOKIE)"
 
