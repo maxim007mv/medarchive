@@ -66,15 +66,15 @@ export function Dialog({
     if (!open) return;
     // Dynamic imports mount after the click, so activeElement may already be the page body —
     // fall back to finalFocus captured by the opener's onClick.
+    const fallback = finalFocus?.current ?? null;
     returnFocusTo.current = handOff
       ? closedDialogReturnTo
       : isFocusable(document.activeElement)
         ? document.activeElement
-        : (finalFocus?.current ?? null);
+        : fallback;
     return () => {
       closedDialogReturnTo = returnFocusTo.current;
       const target = returnFocusTo.current;
-      const fallback = finalFocus?.current;
       queueMicrotask(() => {
         if (document.activeElement?.closest('[role="dialog"]')) return;
         if (isFocusable(target)) target.focus();
