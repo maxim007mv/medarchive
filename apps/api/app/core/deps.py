@@ -1,5 +1,6 @@
 """Request dependencies: database session, authenticated session, scopes, workspace keys."""
 
+import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -106,9 +107,10 @@ async def load_workspace_keys(db: AsyncSession, kek: Kek, workspace_id: UUID) ->
     """Open this workspace's keys for the current request only. Call inside `workspace_tx`.
 
     A workspace that is crypto-erased (deleted) has no keys: such sessions are already revoked,
-    so this is reached only in a race with deletion and answers 401.
+    so this is reached only in a race with deletion and answers 401. Opening the bundle is
+    CPU-bound Tink work: keep it off the event loop so 50 VU of list/search still share I/O.
     """
     wrapped = await db.scalar(select(Workspace.dek_ciphertext).where(Workspace.id == workspace_id))
     if wrapped is None:
         raise ProblemError(ErrorCode.UNAUTHENTICATED)
-    return kek.open_workspace_keys(wrapped, workspace_id)
+    return await asyncio.to_thread(kek.open_workspace_keys, wrapped, workspace_id)
