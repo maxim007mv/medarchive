@@ -11,6 +11,8 @@ export async function expectNoSeriousA11yViolations(
   testInfo: TestInfo,
   options: { exclude?: string[] } = {},
 ): Promise<void> {
+  // Next streams metadata after the content on client navigation: the <title> comes a moment later.
+  await expect(page).toHaveTitle(/\S/);
   let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
   for (const selector of options.exclude ?? []) builder = builder.exclude(selector);
   const results = await builder.analyze();
