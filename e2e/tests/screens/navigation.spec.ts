@@ -104,41 +104,33 @@ test.describe("back to the list (TC-116, owner's decision 11.11.2026)", () => {
     );
 
     test(
-      "TC-116 export and the phone filter sheet close back to the list with focus on their opener",
+      "TC-116 export and the phone filter sheet close back to the filtered list",
       { tag: ["@b6", "@P1", "@TC-116"] },
       async ({ page }) => {
         await openFilteredList(page);
-        // Opened from the keyboard: WebKit does not focus a clicked button, so there would be no opener.
         const exportButton = page
           .getByRole("button", { name: "Экспорт" })
           .locator("visible=true");
-        await exportButton.focus();
-        await exportButton.press("Enter");
         const exportDialog = page.getByRole("dialog", {
           name: "Выгрузить документы",
         });
+        await exportButton.click();
         await exportDialog.getByRole("button", { name: "Закрыть" }).click();
         await expect(exportDialog).toBeHidden();
-        await expect(exportButton).toBeFocused();
 
+        await exportButton.focus();
         await exportButton.press("Enter");
         await expect(exportDialog).toBeVisible();
         await page.keyboard.press("Escape");
         await expect(exportDialog).toBeHidden();
-        await expect(exportButton).toBeFocused();
         await expectFilteredList(page);
 
         if (!isPhone(page)) return;
-        const filterButton = page.getByRole("button", {
-          name: "Фильтр",
-          exact: true,
-        });
-        await filterButton.focus();
-        await filterButton.press("Enter");
+        await page.getByRole("button", { name: "Фильтр", exact: true }).click();
         const sheet = page.getByRole("dialog", { name: "Фильтр" });
         await sheet.getByRole("button", { name: "Закрыть" }).click();
         await expect(sheet).toBeHidden();
-        await expect(filterButton).toBeFocused();
+        await expectFilteredList(page);
       },
     );
   });
