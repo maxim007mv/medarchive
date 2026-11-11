@@ -43,6 +43,30 @@ function uuid() {
   );
 }
 
+// Storage reads the POST policy fields before the file, so `file` must be the last part (else 400
+// MalformedPOSTRequest); k6 does not keep the field order of an object in a multipart body.
+function presignedForm(fields, bytes, fileName) {
+  const boundary = `medarchive-${uuid()}`;
+  let head = "";
+  for (const [name, value] of Object.entries(fields)) {
+    head += `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+  }
+  head +=
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+    "Content-Type: application/pdf\r\n\r\n";
+  const tail = `\r\n--${boundary}--\r\n`;
+  const body = new Uint8Array(head.length + bytes.byteLength + tail.length);
+  writeAscii(body, head, 0);
+  body.set(new Uint8Array(bytes), head.length);
+  writeAscii(body, tail, head.length + bytes.byteLength);
+  return { body: body.buffer, contentType: `multipart/form-data; boundary=${boundary}` };
+}
+
+// Policy fields and fixture names are ASCII.
+function writeAscii(target, text, offset) {
+  for (let i = 0; i < text.length; i += 1) target[offset + i] = text.charCodeAt(i);
+}
+
 function expectStatus(response, status, what) {
   if (response.status !== status) {
     throw new Error(`${what}: ${response.status} request_id=${response.headers["X-Request-Id"]}`);
@@ -78,8 +102,8 @@ export function setup() {
       "uploads.create",
     ).json();
     const storageUrl = upload.url.replace(/^https?:\/\/[^/]+/, STORAGE_URL);
-    const form = { ...upload.fields, file: http.file(source.bytes, source.file, "application/pdf") };
-    const stored = http.post(storageUrl, form);
+    const form = presignedForm(upload.fields, source.bytes, source.file);
+    const stored = http.post(storageUrl, form.body, { headers: { "Content-Type": form.contentType } });
     if (stored.status >= 300) throw new Error(`storage upload: ${stored.status}`);
     expectStatus(
       http.post(
