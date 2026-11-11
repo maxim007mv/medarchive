@@ -28,7 +28,13 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Consent, Document, DocumentFile, DocumentType
-from app.modules.documents.listing import ListFilter, OrderBy, Position
+from app.modules.documents.listing import (
+    UNDATED_LIST_KEY,
+    ListFilter,
+    OrderBy,
+    Position,
+    list_key,
+)
 from app.modules.documents.schemas import TypeCode
 
 _SOFT_DELETE = text("SELECT app.soft_delete_document(:document_id)")
@@ -199,14 +205,19 @@ async def type_titles(db: AsyncSession) -> dict[str, str]:
 
 
 def _date_condition(list_filter: ListFilter, tz: str) -> ColumnElement[bool]:
+    # Document dates are compared through list_key, the leading column of documents_list after
+    # workspace_id, so a period is an index range (Q3, Q6) rather than a filter over the archive.
     if list_filter.undated:
-        return Document.document_date.is_(None)
+        return Document.list_key == UNDATED_LIST_KEY
     conditions: list[ColumnElement[bool]] = []
     if list_filter.date_field == "document":
-        if list_filter.date_from:
-            conditions.append(Document.document_date >= list_filter.date_from)
+        # list_key falls as the date grows, and undated rows hold the largest key.
         if list_filter.date_to:
-            conditions.append(Document.document_date <= list_filter.date_to)
+            conditions.append(Document.list_key >= list_key(list_filter.date_to))
+        if list_filter.date_from:
+            conditions.append(Document.list_key <= list_key(list_filter.date_from))
+        elif list_filter.date_to:
+            conditions.append(Document.list_key < UNDATED_LIST_KEY)
     else:
         # Day boundaries of the user's zone, as `timestamp AT TIME ZONE tz`; the column itself is
         # not wrapped in a function, so documents_by_upload stays usable (Q5).
