@@ -7,6 +7,8 @@ import { Field, fieldFrameClasses, useFieldIds, type FieldProps } from "./field"
 
 export type InputProps = Omit<ComponentPropsWithRef<"input">, "className"> &
   FieldProps & {
+    /** After the label, e.g. an «i» with an explanation. */
+    labelAddon?: ReactNode;
     /** Inside the field on the left, e.g. a 16 px search icon. */
     leading?: ReactNode;
     /** Inside the field on the right, e.g. the `/` hotkey hint or a clear button. */
@@ -17,6 +19,7 @@ export type InputProps = Omit<ComponentPropsWithRef<"input">, "className"> &
 export function Input({
   label,
   labelHidden,
+  labelAddon,
   hint,
   error,
   counter,
@@ -36,6 +39,7 @@ export function Input({
         controlId={controlId}
         label={label}
         labelHidden={labelHidden}
+        labelAddon={labelAddon}
         hint={hint}
         error={error}
         counter={counter}

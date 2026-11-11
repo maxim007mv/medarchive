@@ -10,10 +10,18 @@ import { Dialog } from "@/components/ui/dialog";
 import { useIsOnline } from "@/lib/api/connectivity";
 import type { DocumentWithEtag } from "@/lib/api/queries";
 import { PDF_MIME } from "@/lib/api/upload";
-import { formatSize, titleFromFileName } from "@/lib/format";
+import { type DateGuess, guessDocumentDate } from "@/lib/document-date";
+import { formatDate, formatSize, titleFromFileName } from "@/lib/format";
 import { errorTitles, t, texts } from "@/lib/texts";
 
-import { applyProblemToForm, DocumentFields, toDocumentFields, useDocumentForm } from "./EditForm";
+import {
+  applyProblemToForm,
+  type DocumentForm,
+  DocumentFields,
+  toDocumentFields,
+  useDocumentForm,
+} from "./EditForm";
+import { todayIso } from "./today";
 import {
   type FailureCode,
   isSaveInProgress,
@@ -168,6 +176,7 @@ function UploadStep({
     date: "",
     undated: false,
   });
+  const dateHint = useGuessedDate(file, form);
   const upload = useUploadFile(file, {
     getFields: () => toDocumentFields(form.getValues()),
     onSaved,
@@ -229,7 +238,7 @@ function UploadStep({
           event.target.value = "";
         }}
       />
-      <DocumentFields form={form} uploadedAt={uploadedAt} />
+      <DocumentFields form={form} uploadedAt={uploadedAt} dateHint={dateHint} />
       <div className="flex flex-col-reverse gap-2 pt-2 md:flex-row md:items-center md:justify-end">
         {disabledReason && (
           <p id={reasonId} className="text-caption text-text3 md:mr-auto">
@@ -252,6 +261,39 @@ function UploadStep({
       </div>
     </form>
   );
+}
+
+const DATE_SOURCE_HINTS: Record<DateGuess["source"], string> = {
+  fileName: texts["upload.date.fromFileName"],
+  pdf: texts["upload.date.fromPdf"],
+};
+
+/**
+ * Puts the date found in the chosen file into «Дата документа» (TC-118) and returns where it came
+ * from while the field still holds it. A typed date and «Дата не указана» are left alone; a date
+ * filled in for the previous file gives way to the new file's.
+ */
+function useGuessedDate(file: File, form: DocumentForm): string | undefined {
+  const [guess, setGuess] = useState<{ text: string; source: DateGuess["source"] } | null>(null);
+  const filledText = useRef<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    void guessDocumentDate(file, todayIso()).then((found) => {
+      const { date, undated } = form.getValues();
+      const ownDate = date !== "" && date !== filledText.current;
+      if (!current || undated || ownDate) return;
+      const text = found ? formatDate(found.date) : "";
+      filledText.current = text;
+      form.setValue("date", text);
+      setGuess(found && { text, source: found.source });
+    });
+    return () => {
+      current = false;
+    };
+  }, [file, form]);
+
+  return guess && form.watch("date") === guess.text ? DATE_SOURCE_HINTS[guess.source] : undefined;
 }
 
 function FileRow({ file, phase }: { file: File; phase: UploadPhase }) {

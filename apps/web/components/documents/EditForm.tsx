@@ -1,12 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useId } from "react";
 import { Controller, useForm, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
 import { Alert } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DateInput } from "@/components/ui/date-input";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { type Problem, pointerToField } from "@/lib/api/errors";
@@ -113,16 +115,21 @@ const TYPE_OPTIONS = DOCUMENT_TYPES.map((type) => ({ value: type, label: typeLab
 export function DocumentFields({
   form,
   uploadedAt,
+  dateHint,
   disabled,
 }: {
   form: DocumentForm;
   /** Shown in the hint «Дата загрузки запишется автоматически» when adding. */
   uploadedAt?: Date;
+  /** Under the date field, e.g. where a filled-in date came from. */
+  dateHint?: string;
   disabled?: boolean;
 }) {
   const { register, control, watch, formState } = form;
   const title = watch("title");
   const undated = watch("undated");
+  const dateHintId = useId();
+  const showDateHint = Boolean(dateHint) && !undated;
   const [uploadedDate, uploadedTime] = uploadedAt
     ? formatDateTime(uploadedAt, browserTimeZone()).split(", ")
     : [];
@@ -167,6 +174,12 @@ export function DocumentFields({
               <DateInput
                 ref={field.ref}
                 label={texts["upload.date.label"]}
+                labelAddon={
+                  <InfoTip label={texts["upload.date.info.label"]}>
+                    {texts["upload.date.info"]}
+                  </InfoTip>
+                }
+                aria-describedby={showDateHint ? dateHintId : undefined}
                 value={undated ? texts["upload.date.noneValue"] : field.value}
                 // A half-typed date is not an error yet; a whole one is checked at once (TC-119).
                 onChange={(value) => {
@@ -199,6 +212,11 @@ export function DocumentFields({
             )}
           />
         </div>
+        {showDateHint && (
+          <p id={dateHintId} className="text-caption text-text2">
+            {dateHint}
+          </p>
+        )}
         {undated ? (
           <Alert variant="warn">{texts["upload.date.noneHint"]}</Alert>
         ) : (

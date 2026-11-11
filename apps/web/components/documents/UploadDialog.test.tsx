@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { MAX_UPLOAD_BYTES } from "@/lib/api/upload";
+import { MAX_UPLOAD_BYTES, PDF_MIME } from "@/lib/api/upload";
 
 import {
   FakeXhr,
@@ -32,6 +32,29 @@ function setup(files: File[]) {
     </Wrapper>,
   );
   return { onSaved, onClose, user: userEvent.setup() };
+}
+
+function pdfWith(name: string, body: string): File {
+  return new File([new TextEncoder().encode(`%PDF-1.4\n${body}`)], name, { type: PDF_MIME });
+}
+
+/** A PDF whose bytes arrive only on `release()`: the person can act while it is read. */
+function slowPdf(name: string, body: string) {
+  const file = pdfWith(name, body);
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const slice = file.slice.bind(file);
+  vi.spyOn(file, "slice").mockImplementation((start, end) => {
+    const part = slice(start, end);
+    const arrayBuffer = async () => {
+      await gate;
+      return part.arrayBuffer();
+    };
+    return { arrayBuffer } as Blob;
+  });
+  return { file, release: () => release() };
 }
 
 const saveButton = () => screen.getByRole("button", { name: /Сохранить в архив|Сохраняем…/ });
@@ -171,6 +194,98 @@ describe("UploadDialog (FE-12)", () => {
     await user.type(date, "6");
 
     expect(await screen.findByText("Такой даты нет. Проверьте день и месяц")).toBeInTheDocument();
+  });
+
+  test("TC-118: a date in the file name fills the field with a note that goes once it is edited", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    const { user } = setup([pdfFile("2026-04-08_obshchiy-analiz-krovi.pdf")]);
+    const date = screen.getByLabelText("Дата документа");
+
+    await waitFor(() => expect(date).toHaveValue("08.04.2026"));
+    expect(date).toHaveAccessibleDescription("Дата взята из имени файла, проверьте");
+
+    await user.clear(date);
+    await user.type(date, "09042026");
+
+    expect(screen.queryByText("Дата взята из имени файла, проверьте")).not.toBeInTheDocument();
+    expect(date).toHaveValue("09.04.2026");
+  });
+
+  test("TC-118: without a date in the name /CreationDate of the PDF is used", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    setup([pdfWith("analiz.pdf", "/CreationDate (D:20260410093000+03'00')")]);
+
+    await waitFor(() => expect(screen.getByLabelText("Дата документа")).toHaveValue("10.04.2026"));
+    expect(screen.getByText("Дата взята из свойств PDF, проверьте")).toBeInTheDocument();
+  });
+
+  test("TC-118: a filled-in date counts as no input, so Esc closes at once", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    const { user, onClose } = setup([pdfFile("2026-04-08_analiz.pdf")]);
+    await waitFor(() => expect(screen.getByLabelText("Дата документа")).toHaveValue("08.04.2026"));
+
+    await user.keyboard("{Escape}");
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  test("TC-118: a future date is not filled in", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    setup([pdfWith("2026-12-01.pdf", "/CreationDate (D:20261201)")]);
+    await waitFor(() => expect(FakeXhr.instances).toHaveLength(1));
+
+    expect(screen.getByLabelText("Дата документа")).toHaveValue("");
+    expect(screen.queryByText(/^Дата взята из/)).not.toBeInTheDocument();
+  });
+
+  test("TC-118: a date typed while the file is read is kept", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    const slow = slowPdf("analiz.pdf", "/CreationDate (D:20260410)");
+    const { user } = setup([slow.file]);
+    const date = screen.getByLabelText("Дата документа");
+
+    await user.type(date, "01032026");
+    await act(async () => slow.release());
+
+    expect(date).toHaveValue("01.03.2026");
+    expect(screen.queryByText(/^Дата взята из/)).not.toBeInTheDocument();
+  });
+
+  test("TC-118: «Дата не указана в документе» ticked while the file is read stays empty", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    const slow = slowPdf("analiz.pdf", "/CreationDate (D:20260410)");
+    const { user } = setup([slow.file]);
+
+    await user.click(screen.getByRole("checkbox", { name: "Дата не указана в документе" }));
+    await act(async () => slow.release());
+    await user.click(screen.getByRole("checkbox", { name: "Дата не указана в документе" }));
+
+    expect(screen.getByLabelText("Дата документа")).toHaveValue("");
+  });
+
+  test("TC-117: the «i» explains the document date on focus, hover and tap; Esc closes it", async () => {
+    mockApi({ "POST /api/v1/uploads": () => json(201, upload("u1")) });
+    const { user } = setup([pdfFile()]);
+    const info = screen.getByRole("button", { name: "Что такое дата документа" });
+    const explanation = /^Дата, которая стоит в самом документе/;
+
+    act(() => info.focus());
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(explanation);
+    expect(info).toHaveAccessibleDescription(explanation);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    expect(info).toHaveFocus();
+    expect(screen.getByRole("dialog", { name: "Новый документ" })).toBeInTheDocument();
+
+    const title = screen.getByLabelText("Название");
+    await user.click(title);
+    await user.hover(info);
+    expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+    await user.hover(title);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+
+    await user.pointer({ keys: "[TouchA]", target: info });
+    expect(await screen.findByRole("tooltip")).toBeInTheDocument();
   });
 
   test("TC-015: a PNG named .pdf is refused on the client without any request", async () => {

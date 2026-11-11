@@ -47,18 +47,35 @@ export function Field({
   controlId,
   label,
   labelHidden,
+  labelAddon,
   hint,
   error,
   counter,
   children,
-}: FieldProps & { controlId: string; children: ReactNode }) {
+}: FieldProps & {
+  controlId: string;
+  /** After the label, outside it, e.g. an «i» with an explanation. */
+  labelAddon?: ReactNode;
+  children: ReactNode;
+}) {
   const hasFooter = Boolean(error || hint || counter);
+  const labelElement = (
+    <label htmlFor={controlId} className={cn("text-label text-text", labelHidden && "sr-only")}>
+      {label}
+    </label>
+  );
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={controlId} className={cn("text-label text-text", labelHidden && "sr-only")}>
-        {label}
-      </label>
+      {labelAddon ? (
+        // Keeps the 24 px addon from stretching the 18 px label row by more than 2 px.
+        <div className="-my-0.5 flex items-center gap-1">
+          {labelElement}
+          {labelAddon}
+        </div>
+      ) : (
+        labelElement
+      )}
       {children}
       {hasFooter && (
         <div className="text-caption flex items-start justify-between gap-3">
