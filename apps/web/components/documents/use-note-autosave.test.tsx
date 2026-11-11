@@ -176,6 +176,21 @@ describe("note autosave (FE-18)", () => {
     expect(api.calls).toHaveLength(1);
   });
 
+  test("unmounting drops the pending 800 ms timer and the page listeners; the copy stays", async () => {
+    const api = mockApi({});
+    const { result, unmount } = setup();
+    act(() => result.current.setDraft("Черновик"));
+
+    unmount();
+    await act(() => vi.advanceTimersByTimeAsync(NOTE_SAVE_DELAY_MS));
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("beforeunload"));
+
+    expect(api.calls).toHaveLength(0);
+    expect(sessionStorage.getItem("medarchive:note:d1")).toBe("Черновик");
+  });
+
   test("a copy left in sessionStorage is restored and saved", async () => {
     sessionStorage.setItem("medarchive:note:d1", "Не дошло");
     const api = mockApi({
